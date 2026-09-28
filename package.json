@@ -1,0 +1,29 @@
+{
+  "name": "headway-clone",
+  "version": "1.0.0",
+  "description": "Headway microlearning copy app with AI summarization, audio reader, and SM-2 spaced repetition",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "headway",
+    "microlearning",
+    "pwa",
+    "gemini",
+    "upstash",
+    "spaced-repetition"
+  ],
+  "author": "",
+  "license": "MIT"
+}

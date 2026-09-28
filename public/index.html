@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Headway - Microlearning Books & Audio</title>
+  
+  <meta name="theme-color" content="#0F1115">
+  <meta name="description" content="Microlearning book summaries, synchronized audio reader, and spaced repetition flashcards powered by Gemini 3.5 Flash Lite.">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/css/style.css?v=3">
+</head>
+<body>
+  <div id="app-shell">
+    
+    <!-- Top Header Bar -->
+    <header class="app-header">
+      <div class="brand-wrapper">
+        <div class="brand-logo-badge">H</div>
+        <span class="brand-title">HEADWAY</span>
+      </div>
+
+      <div class="header-actions">
+        <div class="streak-pill" id="header-streak-pill" title="Current Daily Reading Streak">
+          <span id="header-flame-icon"></span>
+          <span id="streak-counter-val">1</span> <span style="font-size: 11px; font-weight: 500;">DAY</span>
+        </div>
+        <button class="icon-btn" id="btn-open-settings" aria-label="Settings and Cloud Status">
+          <span id="header-settings-icon"></span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Scrollable Content -->
+    <main class="main-content" id="main-content-scroll">
+
+      <!-- TAB 1: TODAY (Home & Habit Dashboard) -->
+      <section class="tab-pane active" id="tab-today">
+        <!-- Daily Goal Progress Card -->
+        <div class="daily-goal-card" id="daily-goal-card">
+          <div class="goal-meta">
+            <div class="goal-label">Daily Growth Target</div>
+            <div class="goal-stat"><span id="stat-today-mins">0</span> / 15 <span style="font-size: 14px; font-weight: 500; color: var(--text-muted);">MIN</span></div>
+            <div class="goal-subtext" id="goal-cheer-text">Listen or read 15 minutes today to maintain your streak.</div>
+          </div>
+          <div class="goal-ring-container">
+            <svg class="goal-ring-svg" width="58" height="58">
+              <circle class="goal-ring-bg" cx="29" cy="29" r="24" stroke-width="4" fill="none" />
+              <circle class="goal-ring-progress" id="svg-goal-ring" cx="29" cy="29" r="24" stroke-width="4" fill="none" stroke-dasharray="150.8" stroke-dashoffset="150.8" />
+            </svg>
+            <span class="goal-ring-text" id="goal-percent-text">0%</span>
+          </div>
+        </div>
+
+        <!-- Hero Card: Curated Pick / Continue Listening -->
+        <div class="section-header">
+          <h2 class="section-title">Daily Recommendation</h2>
+          <span class="section-subtitle">15-min masterwork</span>
+        </div>
+        
+        <div class="hero-book-card" id="hero-book-card">
+          <div class="hero-tag">
+            <span id="hero-sparkle-icon"></span> Top Editorial Pick
+          </div>
+          <h3 class="hero-title" id="hero-title">Atomic Habits</h3>
+          <div class="hero-author" id="hero-author">James Clear</div>
+          <p class="hero-synopsis" id="hero-synopsis">
+            Tiny changes can produce remarkable results. Master the Four Laws of Behavior Change to break bad habits and build enduring positive routines.
+          </p>
+          <div class="hero-actions">
+            <div class="duration-badge">
+              <span id="hero-clock-icon"></span>
+              <span id="hero-duration">15 mins · 5 chapters</span>
+            </div>
+            <button class="btn-primary" id="btn-hero-play">
+              <span id="hero-play-icon"></span> Listen Now
+            </button>
+          </div>
+        </div>
+
+        <!-- Explore Topics -->
+        <div class="section-header">
+          <h2 class="section-title">Focus Pillars</h2>
+        </div>
+        <div class="category-chips" id="today-category-chips">
+          <button class="chip-btn active" data-cat="all">All Topics</button>
+          <button class="chip-btn" data-cat="Productivity & Habits">Productivity</button>
+          <button class="chip-btn" data-cat="Career & Focus">Career</button>
+          <button class="chip-btn" data-cat="Wealth & Finance">Wealth</button>
+          <button class="chip-btn" data-cat="Psychology & Decision Making">Psychology</button>
+          <button class="chip-btn" data-cat="Leadership & Life">Leadership</button>
+        </div>
+
+        <!-- Featured Library Grid -->
+        <div class="book-grid" id="today-book-grid">
+          <!-- Dynamically populated -->
+        </div>
+      </section>
+
+      <!-- TAB 2: LIBRARY (Catalog & Search) -->
+      <section class="tab-pane" id="tab-library">
+        <div class="section-header">
+          <h2 class="section-title">Microlearning Library</h2>
+          <span class="section-subtitle" id="library-count-label">5 Titles</span>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="form-group" style="position: relative; margin-bottom: 14px;">
+          <input type="text" class="form-input" id="library-search-input" placeholder="Search books, authors, or topics..." style="padding-left: 36px;">
+          <div style="position: absolute; left: 12px; top: 11px; color: var(--text-muted);" id="search-icon-slot"></div>
+        </div>
+
+        <!-- Category Chips -->
+        <div class="category-chips" id="library-category-chips">
+          <button class="chip-btn active" data-cat="all">All</button>
+          <button class="chip-btn" data-cat="Productivity & Habits">Productivity</button>
+          <button class="chip-btn" data-cat="Career & Focus">Career & Focus</button>
+          <button class="chip-btn" data-cat="Wealth & Finance">Wealth</button>
+          <button class="chip-btn" data-cat="Psychology & Decision Making">Psychology</button>
+          <button class="chip-btn" data-cat="Leadership & Life">Leadership</button>
+        </div>
+
+        <div class="book-grid" id="library-book-grid">
+          <!-- Dynamically populated -->
+        </div>
+      </section>
+
+      <!-- TAB 3: REVIEW (Spaced Repetition SM-2 Deck) -->
+      <section class="tab-pane" id="tab-review">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">Spaced Repetition</h2>
+            <div class="section-subtitle">Active recall powered by SuperMemo-2</div>
+          </div>
+        </div>
+
+        <!-- Stats Bar -->
+        <div class="review-stats-bar">
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Cards Due Today</div>
+            <div style="font-size: 18px; font-weight: 700; color: var(--brand-amber);" id="stat-due-count">0</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Total Mastered</div>
+            <div style="font-size: 18px; font-weight: 700; color: var(--text-primary);" id="stat-mastered-count">0</div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Total Reviewed</div>
+            <div style="font-size: 18px; font-weight: 700; color: var(--accent-blue);" id="stat-reviewed-count">0</div>
+          </div>
+        </div>
+
+        <!-- Active Flashcard Container -->
+        <div id="flashcard-deck-container">
+          <div class="flashcard-wrapper" id="flashcard-wrapper">
+            <div class="flashcard-inner" id="flashcard-inner">
+              <!-- Front -->
+              <div class="flashcard-face flashcard-front">
+                <div class="card-label-badge" id="card-book-tag">Insight Gem</div>
+                <div class="card-question" id="card-question-text">
+                  What is the compound effect of getting 1% better every day for a year?
+                </div>
+                <div class="card-tap-hint">Tap card to reveal answer</div>
+              </div>
+              <!-- Back -->
+              <div class="flashcard-face flashcard-back">
+                <div class="card-label-badge" style="color: var(--accent-green);">Key Takeaway</div>
+                <div class="card-answer" id="card-answer-text">
+                  You end up 37 times better (1.01^365 = 37.78). Habits are the compound interest of self-improvement.
+                </div>
+                <div class="card-tap-hint" style="color: var(--brand-amber);">Rate your recall below</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SM-2 Rating Buttons -->
+          <div class="sm2-action-bar" id="sm2-buttons-bar">
+            <button class="btn-sm2 btn-sm2-hard" id="btn-sm2-hard" data-q="2">
+              <span>Hard</span>
+              <span class="btn-sm2-sub">Repeat soon (1d)</span>
+            </button>
+            <button class="btn-sm2 btn-sm2-good" id="btn-sm2-good" data-q="4">
+              <span>Good</span>
+              <span class="btn-sm2-sub">Graduating interval</span>
+            </button>
+            <button class="btn-sm2 btn-sm2-easy" id="btn-sm2-easy" data-q="5">
+              <span>Easy</span>
+              <span class="btn-sm2-sub">Extended interval</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Empty / Complete State -->
+        <div id="flashcard-completed-state" style="display: none; text-align: center; padding: 48px 20px;">
+          <div style="width: 52px; height: 52px; border-radius: 50%; background: rgba(52, 211, 153, 0.15); color: #34D399; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;" id="all-caught-up-icon"></div>
+          <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 6px;">All Caught Up!</h3>
+          <p style="font-size: 14px; color: var(--text-secondary); margin-bottom: 20px;">
+            You have reviewed all your due insight gems for today. Come back tomorrow for your scheduled SM-2 intervals.
+          </p>
+          <button class="btn-secondary" id="btn-review-all-cards" style="margin: 0 auto;">
+            Review All Deck Cards Anyway
+          </button>
+        </div>
+      </section>
+
+      <!-- TAB 4: SHORTS (Reels of Bite-Sized Insights & Scenario Quizzes) -->
+      <section class="tab-pane" id="tab-shorts">
+        <div class="shorts-container" id="shorts-reel-container">
+          <!-- Dynamically populated vertical cards -->
+        </div>
+      </section>
+
+      <!-- TAB 5: AI STUDIO (Gemini 3.5 Flash Lite Ingestion) -->
+      <section class="tab-pane" id="tab-studio">
+        <div class="section-header">
+          <div>
+            <h2 class="section-title">AI Summarization Studio</h2>
+            <div class="section-subtitle">Powered by Gemini 3.5 Flash Lite</div>
+          </div>
+        </div>
+
+        <div class="studio-card">
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5;">
+            Input any book title, podcast topic, or raw YouTube transcript. Gemini 3.5 Flash Lite synthesizes a structured 5-chapter microlearning edition with SM-2 flashcards and scenario quizzes.
+          </p>
+
+          <div class="form-group">
+            <label class="form-label" for="studio-input">Book Title, Topic, or Transcript</label>
+            <textarea class="form-textarea" id="studio-input" placeholder="e.g. 'Man's Search for Meaning by Viktor Frankl' or paste full podcast transcript..."></textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="studio-language">Output Language</label>
+            <select class="form-select" id="studio-language">
+              <option value="English">English</option>
+              <option value="Japanese">Japanese (日本語)</option>
+            </select>
+          </div>
+
+          <button class="btn-primary" id="btn-generate-ai" style="width: 100%; justify-content: center; padding: 12px;">
+            <span id="studio-sparkle-icon"></span> Generate with Gemini 3.5 Flash Lite
+          </button>
+
+          <div id="studio-status-box" style="display: none; margin-top: 14px; padding: 12px; border-radius: var(--radius-md); background: var(--bg-surface-elevated); font-size: 13px; color: var(--brand-amber);">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <div class="spinner" style="width: 14px; height: 14px; border: 2px solid var(--brand-amber); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+              <span id="studio-status-text">Synthesizing 5 chapters and flashcards...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sample Ingestion Chips -->
+        <div class="section-header">
+          <h3 style="font-size: 14px; font-weight: 600; color: var(--text-secondary);">One-Tap Ideas to Summarize</h3>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <button class="btn-secondary btn-sample-idea" data-idea="Essentialism: The Disciplined Pursuit of Less by Greg McKeown" style="justify-content: flex-start; text-align: left;">
+            📖 Essentialism — Greg McKeown
+          </button>
+          <button class="btn-secondary btn-sample-idea" data-idea="Show Your Work! 10 Ways to Share Your Creativity and Get Discovered by Austin Kleon" style="justify-content: flex-start; text-align: left;">
+            🎨 Show Your Work! — Austin Kleon
+          </button>
+          <button class="btn-secondary btn-sample-idea" data-idea="Principles for Dealing with the Changing World Order by Ray Dalio" style="justify-content: flex-start; text-align: left;">
+            🌐 Changing World Order — Ray Dalio
+          </button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Persistent Mini Audio Player -->
+    <div class="mini-player-bar" id="mini-player-bar" style="display: none;">
+      <div class="mini-progress-bar" id="mini-progress-fill"></div>
+      <div class="mini-player-meta" id="mini-player-expand-trigger">
+        <div class="mini-player-title" id="mini-book-title">Atomic Habits</div>
+        <div class="mini-player-sub" id="mini-chapter-title">Ch 1: The Surprising Power</div>
+      </div>
+      <div class="mini-player-controls">
+        <button class="mini-play-btn" id="btn-mini-play" aria-label="Play/Pause">
+          <span id="mini-play-icon"></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Fixed Bottom Navigation -->
+    <nav class="bottom-nav">
+      <button class="nav-item active" id="nav-today" data-tab="tab-today">
+        <span class="nav-icon" id="icon-nav-today"></span>
+        <span>Today</span>
+      </button>
+      <button class="nav-item" id="nav-library" data-tab="tab-library">
+        <span class="nav-icon" id="icon-nav-library"></span>
+        <span>Library</span>
+      </button>
+      <button class="nav-item" id="nav-review" data-tab="tab-review">
+        <span class="nav-icon" id="icon-nav-review"></span>
+        <span>Review</span>
+      </button>
+      <button class="nav-item" id="nav-shorts" data-tab="tab-shorts">
+        <span class="nav-icon" id="icon-nav-shorts"></span>
+        <span>Shorts</span>
+      </button>
+      <button class="nav-item" id="nav-studio" data-tab="tab-studio">
+        <span class="nav-icon" id="icon-nav-studio"></span>
+        <span>AI Studio</span>
+      </button>
+    </nav>
+
+    <!-- Full Reader & Audio Modal (Native Feel) -->
+    <div class="reader-modal" id="reader-modal">
+      <div class="reader-header">
+        <button class="icon-btn" id="btn-close-reader">
+          <span id="icon-close-reader"></span>
+        </button>
+        <div style="text-align: center; max-width: 65%;">
+          <div style="font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="reader-book-title">Atomic Habits</div>
+          <div style="font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="reader-author-name">James Clear</div>
+        </div>
+        <button class="icon-btn" id="btn-toggle-sleep" title="Sleep Timer">
+          <span id="icon-sleep-timer"></span>
+        </button>
+      </div>
+
+      <!-- Chapter Tabs -->
+      <div class="reader-chapter-tabs" id="reader-chapter-tabs">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <!-- Synchronized Reader Text -->
+      <div class="reader-text-container" id="reader-text-container">
+        <!-- Rendered paragraphs -->
+      </div>
+
+      <!-- Audio Deck -->
+      <div class="reader-audio-deck">
+        <div class="scrub-container">
+          <span class="time-label" id="reader-current-time">00:00</span>
+          <input type="range" class="scrub-slider" id="reader-scrubber" min="0" max="100" value="0">
+          <span class="time-label" id="reader-total-time">15:00</span>
+        </div>
+
+        <div class="playback-controls">
+          <button class="icon-btn" id="btn-reader-speed" style="font-size: 12px; font-weight: 700; width: 44px;">
+            1.0x
+          </button>
+          
+          <button class="icon-btn" id="btn-reader-skip-back" style="width: 44px; height: 44px;">
+            <span id="icon-deck-back15"></span>
+          </button>
+
+          <button class="btn-deck-play" id="btn-reader-play">
+            <span id="icon-deck-play"></span>
+          </button>
+
+          <button class="icon-btn" id="btn-reader-skip-forward" style="width: 44px; height: 44px;">
+            <span id="icon-deck-forward15"></span>
+          </button>
+
+          <button class="icon-btn" id="btn-reader-next-ch" style="width: 44px; height: 44px;" title="Next Chapter">
+            <span id="icon-deck-next-ch"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Book Details Drawer / Modal -->
+    <div class="modal-overlay" id="book-detail-modal">
+      <div class="modal-sheet">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
+          <div>
+            <div style="font-size: 11px; text-transform: uppercase; font-weight: 700; color: var(--brand-amber); margin-bottom: 2px;" id="detail-category">Productivity</div>
+            <h3 style="font-size: 20px; font-weight: 800; color: #FFFFFF;" id="detail-title">Atomic Habits</h3>
+            <div style="font-size: 13px; color: var(--text-secondary);" id="detail-author">James Clear</div>
+          </div>
+          <button class="icon-btn" id="btn-close-detail">
+            <span id="icon-close-detail"></span>
+          </button>
+        </div>
+
+        <p style="font-size: 14px; line-height: 1.6; color: #D1D5DB; margin-bottom: 16px;" id="detail-synopsis"></p>
+
+        <div style="margin-bottom: 16px;">
+          <h4 style="font-size: 13px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;">Key Takeaways</h4>
+          <ul id="detail-takeaways" style="padding-left: 18px; font-size: 13px; color: var(--text-secondary); line-height: 1.6;"></ul>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <h4 style="font-size: 13px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;">Chapters (15m Audio)</h4>
+          <div id="detail-chapters-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <button class="btn-primary" id="btn-detail-start-listening" style="justify-content: center; padding: 12px;">
+            <span id="icon-detail-listen"></span> Listen (15m)
+          </button>
+          <button class="btn-secondary" id="btn-detail-read-now" style="justify-content: center; padding: 12px;">
+            Read Chapters
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings / Status Modal -->
+    <div class="modal-overlay" id="settings-modal">
+      <div class="modal-sheet">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h3 style="font-size: 18px; font-weight: 700;">System & Architecture</h3>
+          <button class="icon-btn" id="btn-close-settings">
+            <span id="icon-close-settings"></span>
+          </button>
+        </div>
+
+        <!-- Infrastructure Stack Status -->
+        <div style="background: var(--bg-canvas); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 14px; margin-bottom: 16px;">
+          <div style="font-size: 12px; font-weight: 700; color: var(--brand-amber); margin-bottom: 8px; text-transform: uppercase;">
+            Cloud & Storage Topology
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;">
+            <span style="color: var(--text-secondary);">Hosting / Runtime:</span>
+            <span style="font-weight: 600; color: var(--text-primary);">Node.js / Render</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;">
+            <span style="color: var(--text-secondary);">Database & Sync:</span>
+            <span style="font-weight: 600;" id="status-upstash-badge">Upstash Redis / Local Fallback</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;">
+            <span style="color: var(--text-secondary);">AI Engine:</span>
+            <span style="font-weight: 600; color: var(--brand-yellow);">Gemini 3.5 Flash Lite</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px;">
+            <span style="color: var(--text-secondary);">Offline / PWA:</span>
+            <span style="font-weight: 600; color: var(--accent-green);">ServiceWorker Active</span>
+          </div>
+        </div>
+
+        <!-- User Habit Records -->
+        <div style="background: var(--bg-canvas); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 14px; margin-bottom: 16px;">
+          <div style="font-size: 12px; font-weight: 700; color: var(--brand-amber); margin-bottom: 8px; text-transform: uppercase;">
+            Habit Records
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px;">
+            <span style="color: var(--text-secondary);">Consecutive Streak:</span>
+            <span style="font-weight: 600; color: var(--text-primary);"><span id="settings-streak-val">1</span> Days</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 13px;">
+            <span style="color: var(--text-secondary);">Total Minutes Read/Listened:</span>
+            <span style="font-weight: 600; color: var(--text-primary);"><span id="settings-total-mins">0</span> Mins</span>
+          </div>
+        </div>
+
+        <button class="btn-secondary" id="btn-refresh-status" style="width: 100%; justify-content: center; padding: 10px;">
+          Refresh Cloud Connection
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <style>
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
