@@ -5,8 +5,8 @@ A zero-to-low-cost Progressive Web App (PWA) clone of **Headway** featuring sync
 ---
 
 ## 1. Architecture & Tech Stack
-- **Client**: Vanilla ES Modules PWA, HTML5 Web Audio & Web Speech API, MediaSession API, Inter typography.
-- **Server**: Node.js 24 + Express 4 web service configured for **Render** (`render.yaml`).
+- **Repository**: [https://github.com/zak-yn/headway](https://github.com/zak-yn/headway)
+- **Deployment**: Render Web Service (`render.yaml`) auto-deploying from `main`.
 - **Database & Storage**: Upstash Redis REST API (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`) with seamless local file fallback (`data/books.json`, `data/user_state.json`).
 - **AI Engine**: Google Gemini 3.5 Flash Lite (`v1beta/models/gemini-3.5-flash-lite:generateContent`) with resilient fallback to guarantee uninterrupted synthesis.
 - **Narration**: Browser SpeechSynthesis with native neural voices + sentence/paragraph highlighting.
