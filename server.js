@@ -136,7 +136,7 @@ app.get('/api/status', (req, res) => {
     const upstash = db.getUpstashStatus();
     res.json({
       success: true,
-      service: 'Headway Microlearning API',
+      service: 'Stride Microlearning API',
       status: 'operational',
       model: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
       upstash,
@@ -153,6 +153,6 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Headway App live on http://localhost:${PORT}`);
+  console.log(`🚀 Stride App live on http://localhost:${PORT}`);
   console.log(`⚡ Ready for Render deployment with Upstash Redis & Gemini 3.5 Flash Lite`);
 });

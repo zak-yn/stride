@@ -66,7 +66,7 @@ export class GeminiSummarizer {
   }
 
   async summarizeContent({ input, language = 'English' }) {
-    const systemPrompt = `You are a world-class editorial curator and executive summary writer for Headway, the premier microlearning application.
+    const systemPrompt = `You are a world-class editorial curator and executive summary writer for Stride, the premier microlearning application.
 Transform the provided input (book title, author, topic, or raw transcript) into a high-density, beautifully structured microlearning masterwork.
 
 Output MUST be strictly valid JSON matching this exact structure:

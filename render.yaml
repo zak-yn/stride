@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: headway-microlearning
+    name: stride-microlearning
     env: node
     plan: free
     buildCommand: npm install

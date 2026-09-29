@@ -1,6 +1,6 @@
 {
-  "name": "Headway - Microlearning Books & Audio",
-  "short_name": "Headway",
+  "name": "Stride - Microlearning Books & Audio",
+  "short_name": "Stride",
   "description": "Bite-sized book summaries, synchronized audio reader, and spaced repetition flashcards.",
   "start_url": "/",
   "display": "standalone",

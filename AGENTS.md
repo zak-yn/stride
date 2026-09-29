@@ -1,12 +1,12 @@
-# Headway: Microlearning Book & Podcast Clone
+# Stride: Microlearning Books & Audio (PWA)
 
-A zero-to-low-cost Progressive Web App (PWA) clone of **Headway** featuring synchronized audio & reader playback, spaced repetition memory flashcards (SM-2), daily habit gamification, and an AI ingestion pipeline powered by **Gemini 3.5 Flash Lite**, backed by **GitHub**, **Render**, and **Upstash Redis**.
+A high-performance Progressive Web App (PWA) for daily microlearning and intellectual momentum featuring synchronized audio & reader playback, spaced repetition memory flashcards (SM-2), daily habit gamification, and an AI ingestion pipeline powered by **Gemini 3.5 Flash Lite**, backed by **GitHub**, **Render**, and **Upstash Redis**.
 
 ---
 
 ## 1. Architecture & Tech Stack
-- **Repository**: [https://github.com/zak-yn/headway](https://github.com/zak-yn/headway)
-- **Deployment**: Render Web Service (`render.yaml`) auto-deploying from `main`.
+- **Repository**: [https://github.com/zak-yn/stride](https://github.com/zak-yn/stride)
+- **Deployment**: Render Web Service (`render.yaml`) auto-deploying from `main` as `stride-microlearning`.
 - **Database & Storage**: Upstash Redis REST API (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`) with seamless local file fallback (`data/books.json`, `data/user_state.json`).
 - **AI Engine**: Google Gemini 3.5 Flash Lite (`v1beta/models/gemini-3.5-flash-lite:generateContent`) with resilient fallback to guarantee uninterrupted synthesis.
 - **Narration**: Browser SpeechSynthesis with native neural voices + sentence/paragraph highlighting.
@@ -82,8 +82,9 @@ headway/
 
 ---
 
-## 7. Changelog
-- **2026-09-29**: Initial release of Headway PWA clone.
+- **2026-09-30**: Official rebranding to "Stride".
+  - Renamed GitHub repository to `zak-yn/stride`, updated render service to `stride-microlearning`, and updated PWA manifest and UI branding.
+- **2026-09-29**: Initial release of microlearning PWA app.
   - Architecture: Render deployment ready (`render.yaml`), Upstash Redis REST + local file fallback (`server/db.js`).
   - AI Engine: Gemini 3.5 Flash Lite (`server/gemini.js`) with resilient fallback.
   - Seed catalog: 5 curated titles (*Atomic Habits*, *Deep Work*, *Psychology of Money*, *Thinking Fast & Slow*, *Diary of a CEO*).

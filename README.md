@@ -1,6 +1,6 @@
-# Headway Microlearning Clone (PWA + Audio Reader + AI Studio)
+# Stride — Microlearning Books & Audio (PWA + Audio Reader + AI Studio)
 
-A production-grade Progressive Web App (PWA) clone of **Headway**, designed for $0-to-low-cost operation and structured for seamless deployment with **GitHub**, **Render**, and **Upstash Redis**.
+A production-grade Progressive Web App (PWA) for daily microlearning, designed for zero-to-low-cost operation and structured for seamless deployment with **GitHub**, **Render**, and **Upstash Redis**.
 
 ---
 
@@ -53,8 +53,8 @@ Open **`http://localhost:3000`** in your browser.
 ### 1. Push to GitHub
 ```bash
 git add .
-git commit -m "feat: complete headway microlearning clone"
-git remote add origin https://github.com/<YOUR_USER>/headway.git
+git commit -m "feat: complete stride microlearning app"
+git remote add origin https://github.com/zak-yn/stride.git
 git branch -M main
 git push -u origin main
 ```
@@ -62,7 +62,7 @@ git push -u origin main
 ### 2. Deploy on Render
 1. Go to [Render Dashboard](https://dashboard.render.com).
 2. Click **New +** -> **Web Service** (or **Blueprint** using `render.yaml`).
-3. Connect your GitHub repository.
+3. Connect your GitHub repository (`zak-yn/stride`).
 4. Configure Environment Variables:
    - `PORT`: `3000`
    - `GEMINI_API_KEY`: *(your Gemini API key)*

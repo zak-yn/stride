@@ -1,7 +1,7 @@
 {
-  "name": "headway-clone",
+  "name": "stride",
   "version": "1.0.0",
-  "description": "Headway microlearning copy app with AI summarization, audio reader, and SM-2 spaced repetition",
+  "description": "Stride: Microlearning book summaries, synchronized audio reader, and SM-2 spaced repetition",
   "main": "server.js",
   "type": "module",
   "scripts": {

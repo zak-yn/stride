@@ -19,8 +19,10 @@ if (!fs.existsSync(DATA_DIR)) {
 const BOOKS_FILE = path.join(DATA_DIR, 'books.json');
 const USER_STATE_FILE = path.join(DATA_DIR, 'user_state.json');
 
-const REDIS_KEY_BOOKS = 'headway_catalog_books';
-const REDIS_KEY_USER_STATE = 'headway_user_state';
+const REDIS_KEY_BOOKS = 'stride_catalog_books';
+const REDIS_KEY_USER_STATE = 'stride_user_state';
+const LEGACY_REDIS_KEY_BOOKS = 'headway_catalog_books';
+const LEGACY_REDIS_KEY_USER_STATE = 'headway_user_state';
 
 class DatabaseService {
   constructor() {
