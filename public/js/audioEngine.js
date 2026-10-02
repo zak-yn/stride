@@ -1,13 +1,15 @@
 /**
- * Headway Synchronized Audio & Reader Engine
+ * Stride Synchronized Audio & Reader Engine
  * Web Speech API + HTML5 Audio + Lockscreen MediaSession API + SM-2 Sync
+ * Pure Native English/Japanese Voice Selection (Eliminating Cross-Language Accents)
  */
 
 export class AudioEngine {
-  constructor({ onStateChange, onSentenceChange, onProgressUpdate }) {
+  constructor({ onStateChange, onSentenceChange, onProgressUpdate, onVoicesReady }) {
     this.onStateChange = onStateChange || (() => {});
     this.onSentenceChange = onSentenceChange || (() => {});
     this.onProgressUpdate = onProgressUpdate || (() => {});
+    this.onVoicesReady = onVoicesReady || (() => {});
 
     this.currentBook = null;
     this.currentChapterIndex = 1;
@@ -20,8 +22,31 @@ export class AudioEngine {
     this.accumulatedSeconds = 0;
     this.progressSyncInterval = null;
 
+    this.selectedVoiceName = typeof localStorage !== 'undefined'
+      ? localStorage.getItem('stride_narrator_voice')
+      : null;
+
+    this.availableVoices = [];
     this.synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
+
+    this._initVoices();
     this._initMediaSession();
+  }
+
+  _initVoices() {
+    if (!this.synth) return;
+
+    const loadVoices = () => {
+      this.availableVoices = this.synth.getVoices();
+      if (this.availableVoices.length > 0) {
+        this.onVoicesReady(this.getGroupedVoices());
+      }
+    };
+
+    loadVoices();
+    if (typeof window !== 'undefined' && 'onvoiceschanged' in this.synth) {
+      this.synth.onvoiceschanged = loadVoices;
+    }
   }
 
   _initMediaSession() {
@@ -50,6 +75,71 @@ export class AudioEngine {
     }
   }
 
+  getGroupedVoices() {
+    const all = this.synth ? this.synth.getVoices() : [];
+    const enList = all.filter(v => v.lang.startsWith('en'));
+    const jaList = all.filter(v => v.lang.startsWith('ja'));
+
+    const formatLabel = (v) => {
+      let flag = '🌐';
+      if (v.lang.includes('GB') || v.lang.includes('UK')) flag = '🇬🇧';
+      else if (v.lang.includes('US')) flag = '🇺🇸';
+      else if (v.lang.includes('AU')) flag = '🇦🇺';
+      else if (v.lang.includes('CA')) flag = '🇨🇦';
+      else if (v.lang.startsWith('ja')) flag = '🇯🇵';
+
+      // Clean voice name
+      const cleanName = v.name
+        .replace(/Microsoft\s+/g, '')
+        .replace(/\s+Desktop/g, '')
+        .replace(/\s+Online\s+\(Natural\)/g, ' (Natural)')
+        .replace(/\s+-\s+English\s+\(United\s+States\)/g, ' (US)')
+        .replace(/\s+-\s+English\s+\(United\s+Kingdom\)/g, ' (UK)')
+        .replace(/\s+-\s+English\s+\(Great\s+Britain\)/g, ' (UK)')
+        .replace(/\s+-\s+Japanese\s+\(Japan\)/g, ' (JP)');
+
+      return `${flag} ${cleanName}`;
+    };
+
+    return {
+      english: enList.map(v => ({ name: v.name, lang: v.lang, label: formatLabel(v) })),
+      japanese: jaList.map(v => ({ name: v.name, lang: v.lang, label: formatLabel(v) })),
+      current: this.selectedVoiceName
+    };
+  }
+
+  setVoice(voiceName) {
+    this.selectedVoiceName = voiceName;
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('stride_narrator_voice', voiceName);
+    }
+    // If currently playing, restart current paragraph with new voice
+    if (this.isPlaying) {
+      this._speakParagraph(this.activeParagraphIdx);
+    }
+  }
+
+  sampleVoice(voiceName) {
+    if (!this.synth) return;
+    this.synth.cancel();
+
+    const voices = this.synth.getVoices();
+    const v = voices.find(item => item.name === voiceName);
+    if (!v) return;
+
+    const isJa = v.lang.startsWith('ja');
+    const sampleText = isJa
+      ? 'こんにちは。こちらは Stride の日本語音声ナレーターです。'
+      : 'Hello! I am your narrator for Stride microlearning summaries.';
+
+    const utt = new SpeechSynthesisUtterance(sampleText);
+    utt.voice = v;
+    utt.lang = v.lang;
+    utt.rate = this.playbackRate;
+    utt.pitch = 1.0;
+    this.synth.speak(utt);
+  }
+
   loadBook(book, chapterIndex = 1) {
     this.stop();
     this.currentBook = book;
@@ -59,7 +149,6 @@ export class AudioEngine {
 
     const chapter = this.getCurrentChapter();
     if (chapter) {
-      // Split chapter into readable paragraphs
       this.paragraphs = chapter.content
         .split(/(?<=[.!?。！？])\s+/)
         .map(s => s.trim())
@@ -126,6 +215,53 @@ export class AudioEngine {
     this.onStateChange({ isPlaying: false });
   }
 
+  _resolveBestVoice(text) {
+    const voices = this.synth ? this.synth.getVoices() : [];
+    const isJapanese = /[一-龠ぁ-ゔァ-ヴー]/.test(text);
+
+    if (isJapanese) {
+      // 1. User selected Japanese voice
+      if (this.selectedVoiceName) {
+        const userChoice = voices.find(v => v.name === this.selectedVoiceName && v.lang.startsWith('ja'));
+        if (userChoice) return { voice: userChoice, lang: userChoice.lang };
+      }
+      // 2. Preferred Japanese voices
+      const preferredJa = ['Nanami', 'Keita', 'Haruka', 'Ayumi', 'Sayaka', 'Ichiro'];
+      for (const name of preferredJa) {
+        const found = voices.find(v => v.lang.startsWith('ja') && v.name.includes(name));
+        if (found) return { voice: found, lang: found.lang };
+      }
+      // 3. Any Japanese voice
+      const anyJa = voices.find(v => v.lang.startsWith('ja'));
+      return { voice: anyJa || null, lang: 'ja-JP' };
+    }
+
+    // === ENGLISH NARRATION ===
+    // Priority 1: User explicitly chosen English voice
+    if (this.selectedVoiceName) {
+      const userChoice = voices.find(v => v.name === this.selectedVoiceName && v.lang.startsWith('en'));
+      if (userChoice) return { voice: userChoice, lang: userChoice.lang };
+    }
+
+    // Priority 2: Natural / Neural voices
+    const neural = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Neural') || v.name.includes('Online')));
+    if (neural) return { voice: neural, lang: neural.lang };
+
+    // Priority 3: Renowned Native UK / US system voices
+    const preferredNames = ['Hazel', 'George', 'Susan', 'Zira', 'David', 'Samantha', 'Daniel', 'Guy', 'Ryan', 'Google US', 'Google UK'];
+    for (const name of preferredNames) {
+      const match = voices.find(v => v.lang.startsWith('en') && v.name.includes(name));
+      if (match) return { voice: match, lang: match.lang };
+    }
+
+    // Priority 4: Any voice with English locale
+    const standardEn = voices.find(v => v.lang.startsWith('en-US') || v.lang.startsWith('en-GB') || v.lang.startsWith('en'));
+    if (standardEn) return { voice: standardEn, lang: standardEn.lang };
+
+    // FALLBACK: NEVER assign a Japanese voice to English text!
+    return { voice: null, lang: 'en-US' };
+  }
+
   _speakParagraph(idx) {
     if (!this.synth) return;
     this.synth.cancel();
@@ -146,15 +282,11 @@ export class AudioEngine {
     this.utterance.rate = this.playbackRate;
     this.utterance.pitch = 1.0;
 
-    // Pick a natural voice if available
-    const voices = this.synth.getVoices();
-    const isJapanese = /[一-龠ぁ-ゔァ-ヴー]/.test(text);
-    if (isJapanese) {
-      const jpVoice = voices.find(v => v.lang.startsWith('ja'));
-      if (jpVoice) this.utterance.voice = jpVoice;
-    } else {
-      const enVoice = voices.find(v => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Premium')));
-      if (enVoice) this.utterance.voice = enVoice;
+    // Resolve optimal native voice and language
+    const { voice, lang } = this._resolveBestVoice(text);
+    this.utterance.lang = lang;
+    if (voice) {
+      this.utterance.voice = voice;
     }
 
     this.utterance.onstart = () => {
@@ -204,7 +336,6 @@ export class AudioEngine {
   }
 
   skip(deltaSec) {
-    // Jump 1-2 paragraphs back or forward as approximation
     const deltaParas = deltaSec > 0 ? 1 : -1;
     const target = Math.max(0, Math.min(this.paragraphs.length - 1, this.activeParagraphIdx + deltaParas));
     this.jumpToParagraph(target);
@@ -250,7 +381,6 @@ export class AudioEngine {
     this.progressSyncInterval = setInterval(() => {
       if (this.isPlaying) {
         this.accumulatedSeconds += 10;
-        // Sync 0.2 min (12 sec) progress
         this.onProgressUpdate({
           minutes: 0.2,
           bookId: this.currentBook?.id,

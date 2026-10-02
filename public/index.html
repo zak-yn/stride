@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="/css/style.css?v=4">
+  <link rel="stylesheet" href="/css/style.css?v=5">
 </head>
 <body>
   <div id="app-shell">
@@ -319,13 +319,18 @@
         <button class="icon-btn" id="btn-close-reader">
           <span id="icon-close-reader"></span>
         </button>
-        <div style="text-align: center; max-width: 65%;">
+        <div style="text-align: center; max-width: 60%;">
           <div style="font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="reader-book-title">Atomic Habits</div>
           <div style="font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="reader-author-name">James Clear</div>
         </div>
-        <button class="icon-btn" id="btn-toggle-sleep" title="Sleep Timer">
-          <span id="icon-sleep-timer"></span>
-        </button>
+        <div style="display: flex; gap: 6px;">
+          <button class="icon-btn" id="btn-toggle-voice" title="Narrator Voice Accent">
+            <span id="icon-voice-selector"></span>
+          </button>
+          <button class="icon-btn" id="btn-toggle-sleep" title="Sleep Timer">
+            <span id="icon-sleep-timer"></span>
+          </button>
+        </div>
       </div>
 
       <!-- Chapter Tabs -->
@@ -461,6 +466,29 @@
       </div>
     </div>
 
+    <!-- Narrator Voice Selection Modal -->
+    <div class="modal-overlay" id="voice-modal">
+      <div class="modal-sheet">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+          <div>
+            <h3 style="font-size: 18px; font-weight: 700;">Narrator Voice</h3>
+            <div style="font-size: 12px; color: var(--text-muted);">Select authentic native accent for speech reading</div>
+          </div>
+          <button class="icon-btn" id="btn-close-voice">
+            <span id="icon-close-voice"></span>
+          </button>
+        </div>
+
+        <div id="voice-list-container" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; max-height: 55vh; overflow-y: auto;">
+          <!-- Dynamically populated voice items -->
+        </div>
+
+        <button class="btn-primary" id="btn-confirm-voice" style="width: 100%; justify-content: center; padding: 11px;">
+          Save Voice Preference
+        </button>
+      </div>
+    </div>
+
   </div>
 
   <style>
@@ -469,6 +497,6 @@
     }
   </style>
 
-  <script type="module" src="/js/app.js"></script>
+  <script type="module" src="/js/app.js?v=2"></script>
 </body>
 </html>

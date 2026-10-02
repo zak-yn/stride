@@ -9,7 +9,7 @@ A high-performance Progressive Web App (PWA) for daily microlearning and intelle
 - **Deployment**: Render Web Service (`render.yaml`) auto-deploying from `main` as `stride-microlearning`.
 - **Database & Storage**: Upstash Redis REST API (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`) with seamless local file fallback (`data/books.json`, `data/user_state.json`).
 - **AI Engine**: Google Gemini 3.5 Flash Lite (`v1beta/models/gemini-3.5-flash-lite:generateContent`) with resilient fallback to guarantee uninterrupted synthesis.
-- **Narration**: Browser SpeechSynthesis with native neural voices + sentence/paragraph highlighting.
+- **Narration**: Browser SpeechSynthesis with native English/Japanese voice isolation (`_resolveBestVoice`), interactive Narrator Voice modal (UK/US accents), sample test auditioning, sentence/paragraph sync highlighting, and MediaSession lockscreen controls.
 
 ---
 
@@ -82,6 +82,9 @@ headway/
 
 ---
 
+- **2026-10-03**: Enforced native English narrator voice & added voice selector modal.
+  - Resolved root cause of Japanese OS default voice (`Microsoft Ayumi`) narrating English summaries by enforcing strict language tags (`en-US`/`en-GB`) and priority filtering.
+  - Added Reader Voice Accent Modal (`#voice-modal`) with 1-tap `▶ Test` auditioning and persistence (`localStorage: stride_narrator_voice`).
 - **2026-09-30**: Official rebranding to "Stride".
   - Renamed GitHub repository to `zak-yn/stride`, updated render service to `stride-microlearning`, and updated PWA manifest and UI branding.
 - **2026-09-29**: Initial release of microlearning PWA app.

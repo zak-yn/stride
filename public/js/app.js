@@ -4,7 +4,7 @@
  */
 
 import { icons } from './icons.js';
-import { AudioEngine } from './audioEngine.js';
+import { AudioEngine } from './audioEngine.js?v=2';
 
 class HeadwayApp {
   constructor() {
@@ -102,6 +102,10 @@ class HeadwayApp {
     // Modals
     document.getElementById('icon-close-detail').innerHTML = icons.close(18);
     document.getElementById('icon-close-settings').innerHTML = icons.close(18);
+    const closeVoiceIcon = document.getElementById('icon-close-voice');
+    if (closeVoiceIcon) closeVoiceIcon.innerHTML = icons.close(18);
+    const voiceSelectorIcon = document.getElementById('icon-voice-selector');
+    if (voiceSelectorIcon) voiceSelectorIcon.innerHTML = icons.mic(18);
     document.getElementById('icon-detail-listen').innerHTML = icons.play(14);
     document.getElementById('studio-sparkle-icon').innerHTML = icons.sparkles(16);
     document.getElementById('all-caught-up-icon').innerHTML = icons.check(28);
@@ -212,6 +216,17 @@ class HeadwayApp {
           this.audio.setSleepTimer(mins);
         }
       }
+    });
+
+    // Voice Accent Selector
+    document.getElementById('btn-toggle-voice')?.addEventListener('click', () => {
+      this.openVoiceModal();
+    });
+    document.getElementById('btn-close-voice')?.addEventListener('click', () => {
+      this.closeVoiceModal();
+    });
+    document.getElementById('btn-confirm-voice')?.addEventListener('click', () => {
+      this.closeVoiceModal();
     });
 
     // Flashcard Flip
@@ -507,6 +522,70 @@ class HeadwayApp {
 
   closeSettingsModal() {
     document.getElementById('settings-modal').classList.remove('is-active');
+  }
+
+  openVoiceModal() {
+    const modal = document.getElementById('voice-modal');
+    const container = document.getElementById('voice-list-container');
+    if (!modal || !container) return;
+
+    const data = this.audio.getGroupedVoices();
+    const currentVoice = this.audio.selectedVoiceName;
+
+    let html = '';
+
+    if (data.english && data.english.length > 0) {
+      html += `<div class="voice-section-title">English Narrators (Native Accents)</div>`;
+      html += data.english.map(v => `
+        <div class="voice-item-card ${v.name === currentVoice ? 'is-active' : ''}" data-voice-name="${v.name}">
+          <span class="voice-label-text">${v.label}</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="voice-sample-btn" data-sample-voice="${v.name}" type="button">▶ Test</button>
+            <span style="font-size: 15px; color: var(--brand-yellow); width: 14px;">${v.name === currentVoice ? '✓' : ''}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    if (data.japanese && data.japanese.length > 0) {
+      html += `<div class="voice-section-title">Japanese Narrators (日本語)</div>`;
+      html += data.japanese.map(v => `
+        <div class="voice-item-card ${v.name === currentVoice ? 'is-active' : ''}" data-voice-name="${v.name}">
+          <span class="voice-label-text">${v.label}</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="voice-sample-btn" data-sample-voice="${v.name}" type="button">▶ Test</button>
+            <span style="font-size: 15px; color: var(--brand-yellow); width: 14px;">${v.name === currentVoice ? '✓' : ''}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    if (!html) {
+      html = '<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px;">Detecting browser voices... Please tap Done or try again in a moment.</div>';
+    }
+
+    container.innerHTML = html;
+
+    container.querySelectorAll('.voice-item-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const vName = card.dataset.voiceName;
+        this.audio.setVoice(vName);
+        this.openVoiceModal(); // re-render selection indicator
+      });
+    });
+
+    container.querySelectorAll('.voice-sample-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.audio.sampleVoice(btn.dataset.sampleVoice);
+      });
+    });
+
+    modal.classList.add('is-active');
+  }
+
+  closeVoiceModal() {
+    document.getElementById('voice-modal')?.classList.remove('is-active');
   }
 
   // --- Audio Reader & Synchronized Playback ---

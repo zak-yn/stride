@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stride-v1';
+const CACHE_NAME = 'stride-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
