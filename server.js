@@ -11,6 +11,7 @@ import { fileURLToPath } from 'url';
 import { db } from './server/db.js';
 import { geminiSummarizer } from './server/gemini.js';
 import { searchYouTube, extractYouTubeId, fetchVideoDetailsAndTranscript } from './server/youtube.js';
+import { ttsService } from './server/tts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -103,6 +104,33 @@ app.get('/api/shorts', (req, res) => {
     res.json({ success: true, shorts });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5.5 Studio Neural TTS Audio Stream (Free Microsoft Edge Azure Neural Voices)
+app.get('/api/tts/voices', (req, res) => {
+  res.json({ success: true, voices: ttsService.getCuratedVoices() });
+});
+
+app.get('/api/tts', async (req, res) => {
+  try {
+    const text = req.query.text;
+    const voice = req.query.voice || 'en-US-AndrewNeural';
+
+    if (!text || !text.trim()) {
+      return res.status(400).send('Text parameter is required');
+    }
+
+    const { audioStream } = await ttsService.synthesizeToStream(text, voice);
+
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    audioStream.pipe(res);
+  } catch (err) {
+    console.error('[TTS API Error]:', err.message);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: err.message });
+    }
   }
 });
 

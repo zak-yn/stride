@@ -1294,3 +1294,133 @@ body {
   transform: scale(0.97);
 }
 
+/* --- Narrator Voice Modal & Studio HD Badges --- */
+.voice-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  margin-bottom: 6px;
+}
+
+.voice-section-pill {
+  font-size: 9px;
+  font-weight: 800;
+  background: rgba(255, 222, 48, 0.15);
+  color: var(--brand-yellow);
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+
+.voice-item-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--bg-surface-elevated);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  user-select: none;
+}
+
+.voice-item-card:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: #1e2128;
+}
+
+.voice-item-card.is-active {
+  border-color: var(--brand-yellow);
+  background: rgba(255, 222, 48, 0.06);
+  box-shadow: 0 0 0 1px rgba(255, 222, 48, 0.15);
+}
+
+.voice-info-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.voice-header-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.voice-label-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.voice-badge-hd {
+  font-size: 9px;
+  font-weight: 800;
+  color: #0F1115;
+  background: var(--brand-yellow);
+  padding: 1px 5px;
+  border-radius: 3px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.voice-desc-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.voice-action-col {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 8px;
+}
+
+.voice-sample-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.voice-sample-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.voice-sample-btn:active {
+  transform: scale(0.96);
+}
+
+.voice-check-mark {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--brand-yellow);
+  width: 14px;
+  text-align: center;
+}
+
+

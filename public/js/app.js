@@ -32,7 +32,13 @@ class HeadwayApp {
     this.audio = new AudioEngine({
       onStateChange: (state) => this.handleAudioStateChange(state),
       onSentenceChange: (idx) => this.handleSentenceChange(idx),
-      onProgressUpdate: (data) => this.handleProgressUpdate(data)
+      onProgressUpdate: (data) => this.handleProgressUpdate(data),
+      onVoicesReady: () => {
+        const modal = document.getElementById('voice-modal');
+        if (modal && modal.classList.contains('is-active')) {
+          this.openVoiceModal();
+        }
+      }
     });
 
     this.init();
@@ -578,34 +584,69 @@ class HeadwayApp {
 
     let html = '';
 
-    if (data.english && data.english.length > 0) {
-      html += `<div class="voice-section-title">English Narrators (Native Accents)</div>`;
-      html += data.english.map(v => `
-        <div class="voice-item-card ${v.name === currentVoice ? 'is-active' : ''}" data-voice-name="${v.name}">
-          <span class="voice-label-text">${v.label}</span>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <button class="voice-sample-btn" data-sample-voice="${v.name}" type="button">▶ Test</button>
-            <span style="font-size: 15px; color: var(--brand-yellow); width: 14px;">${v.name === currentVoice ? '✓' : ''}</span>
+    // 1. Studio Neural HD English Voices
+    if (data.studioEnglish && data.studioEnglish.length > 0) {
+      html += `<div class="voice-section-title">
+        <span>Studio Neural Voices (Human-Grade AI Narration)</span>
+        <span class="voice-section-pill">Recommended</span>
+      </div>`;
+      html += data.studioEnglish.map(v => `
+        <div class="voice-item-card ${v.id === currentVoice ? 'is-active' : ''}" data-voice-name="${v.id}">
+          <div class="voice-info-col">
+            <div class="voice-header-row">
+              <span class="voice-label-text">${v.label}</span>
+              <span class="voice-badge-hd">HD Studio</span>
+            </div>
+            ${v.style ? `<div class="voice-desc-text">${v.style}</div>` : ''}
+          </div>
+          <div class="voice-action-col">
+            <button class="voice-sample-btn" data-sample-voice="${v.id}" type="button">▶ Test</button>
+            <span class="voice-check-mark">${v.id === currentVoice ? '✓' : ''}</span>
           </div>
         </div>
       `).join('');
     }
 
-    if (data.japanese && data.japanese.length > 0) {
-      html += `<div class="voice-section-title">Japanese Narrators (日本語)</div>`;
-      html += data.japanese.map(v => `
+    // 2. Studio Neural HD Japanese Voices
+    if (data.studioJapanese && data.studioJapanese.length > 0) {
+      html += `<div class="voice-section-title">Japanese Studio Neural (日本語)</div>`;
+      html += data.studioJapanese.map(v => `
+        <div class="voice-item-card ${v.id === currentVoice ? 'is-active' : ''}" data-voice-name="${v.id}">
+          <div class="voice-info-col">
+            <div class="voice-header-row">
+              <span class="voice-label-text">${v.label}</span>
+              <span class="voice-badge-hd">HD Studio</span>
+            </div>
+            ${v.style ? `<div class="voice-desc-text">${v.style}</div>` : ''}
+          </div>
+          <div class="voice-action-col">
+            <button class="voice-sample-btn" data-sample-voice="${v.id}" type="button">▶ Test</button>
+            <span class="voice-check-mark">${v.id === currentVoice ? '✓' : ''}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // 3. Fallback Local Device Voices (if available)
+    const localVoices = (data.english || []).concat(data.japanese || []);
+    if (localVoices.length > 0) {
+      html += `<div class="voice-section-title" style="margin-top: 14px; opacity: 0.7;">Device Local Voices (Offline Fallback)</div>`;
+      html += localVoices.slice(0, 6).map(v => `
         <div class="voice-item-card ${v.name === currentVoice ? 'is-active' : ''}" data-voice-name="${v.name}">
-          <span class="voice-label-text">${v.label}</span>
-          <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="voice-info-col">
+            <span class="voice-label-text">${v.label}</span>
+            <div class="voice-desc-text" style="font-size: 10px;">Browser Synthesizer (${v.lang})</div>
+          </div>
+          <div class="voice-action-col">
             <button class="voice-sample-btn" data-sample-voice="${v.name}" type="button">▶ Test</button>
-            <span style="font-size: 15px; color: var(--brand-yellow); width: 14px;">${v.name === currentVoice ? '✓' : ''}</span>
+            <span class="voice-check-mark">${v.name === currentVoice ? '✓' : ''}</span>
           </div>
         </div>
       `).join('');
     }
 
     if (!html) {
-      html = '<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px;">Detecting browser voices... Please tap Done or try again in a moment.</div>';
+      html = '<div style="padding: 20px; text-align: center; color: var(--text-muted); font-size: 13px;">Loading voices...</div>';
     }
 
     container.innerHTML = html;

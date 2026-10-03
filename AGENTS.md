@@ -9,7 +9,7 @@ A high-performance Progressive Web App (PWA) for daily microlearning and intelle
 - **Deployment**: Render Web Service (`render.yaml`) auto-deploying from `main` as `stride-microlearning`.
 - **Database & Storage**: Upstash Redis REST API (`UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN`) with seamless local file fallback (`data/books.json`, `data/user_state.json`).
 - **AI Engine**: Google Gemini 3.5 Flash Lite (`v1beta/models/gemini-3.5-flash-lite:generateContent`) with resilient fallback to guarantee uninterrupted synthesis.
-- **Narration**: Browser SpeechSynthesis with native English/Japanese voice isolation (`_resolveBestVoice`), interactive Narrator Voice modal (UK/US accents), sample test auditioning, sentence/paragraph sync highlighting, and MediaSession lockscreen controls.
+- **Narration**: High-fidelity Microsoft Azure Studio Neural TTS (`msedge-tts` streaming 24kHz MP3 via `/api/tts`) with natural breathing, cadence, and inflection. Features 8 studio voices (Andrew, Ava, Ryan, Sonia, Nanami, etc.), lookahead paragraph preloader for zero-latency gapless playback, sample auditioning, synchronized sentence/paragraph highlighting, and offline browser SpeechSynthesis fallback.
 
 ---
 
@@ -21,13 +21,14 @@ headway/
 │   ├── css/style.css      # Anti-AI architectural dark mode (#0F1115, #17191E, #FFDE30)
 │   ├── js/
 │   │   ├── icons.js       # Minimalist 1.5px stroke vector SVG icons
-│   │   ├── audioEngine.js # Synchronized speech engine + MediaSession API
+│   │   ├── audioEngine.js # Studio Neural audio streaming + preloader + MediaSession
 │   │   └── app.js         # Navigation, SM-2 cards, shorts feed & AI Studio
 │   ├── icons/             # 192x192 & 512x512 PWA icons
 │   ├── manifest.webmanifest # PWA standalone manifest
 │   └── index.html         # Mobile-first shell (Today, Library, Review, Shorts, Studio)
 ├── server/
 │   ├── db.js              # Upstash Redis REST + local file storage layer
+│   ├── tts.js             # Azure Studio Neural TTS streaming service (msedge-tts)
 │   ├── gemini.js          # Gemini 3.5 Flash Lite summarization & structured extractor
 │   ├── youtube.js         # In-app YouTube search & multi-language transcript extractor
 │   └── seedData.js        # 5 curated editorial books with chapters, flashcards & quizzes
@@ -52,6 +53,8 @@ headway/
 | `GET` | `/api/shorts` | Vertical reels of micro-insights & interactive scenario quizzes |
 | `GET` | `/api/youtube/search?q=` | In-app YouTube video search (title, duration, views, thumb) |
 | `POST` | `/api/youtube/summarize` | Extracts speech transcript & generates 5 chapters + SM-2 cards |
+| `GET` | `/api/tts/voices` | Returns curated Studio Neural HD narrators (US, UK, JA) |
+| `GET` | `/api/tts?text=&voice=` | Streams 24kHz MP3 audio with caching headers |
 | `GET` | `/api/status` | System health, Upstash connection status & Gemini model info |
 
 ---
@@ -75,16 +78,22 @@ headway/
 
 ## 6. Verification Loop
 1. `npm start` (or `node server.js`): Ensure server starts on port 3000 with 0 errors.
-2. Verify `/api/status`, `/api/books`, `/api/flashcards`, `/api/youtube/search`, and `/api/progress`.
+2. Verify `/api/status`, `/api/books`, `/api/flashcards`, `/api/youtube/search`, `/api/tts/voices`, and `/api/progress`.
 3. Sensor check UI via headless browser or Playwright:
    - Check Today tab, Daily Goal ring, and Hero Pick.
-   - Test Audio Reader modal playback & sentence highlighting.
+   - Test Audio Reader modal playback & sentence highlighting with Studio Neural voice.
    - Test YouTube in-app search & 1-tap summarization flow in AI Studio.
    - Test 3D Flashcard flip and SM-2 review rating submission.
    - Test Shorts vertical reels and interactive scenario quiz.
 
 ---
 
+## 7. Changelog
+- **2026-10-04**: Studio Neural Audio Upgrade (Natural Human Narration).
+  - Integrated `msedge-tts` streaming 24kHz studio-quality neural audio (`en-US-AndrewNeural`, `en-US-AvaNeural`, `en-GB-RyanNeural`, `ja-JP-NanamiNeural`, etc.) to eliminate robotic browser SAPI5 voices.
+  - Added lookahead paragraph preloader (`_preloadNextParagraph`) for zero-latency, gapless paragraph transitions.
+  - Built upgraded Narrator Voice modal with HD Studio badges, style descriptions, and real-time sample auditioning (`/api/tts`).
+  - Preserved graceful offline fallback to browser `speechSynthesis`.
 - **2026-10-04**: YouTube In-App Search, Video Summarization & English Default.
   - Built `server/youtube.js` for real-time video search & automatic subtitle/speech transcript extraction (JA/EN).
   - Wired Gemini 3.5 Flash Lite to ingest full video speech transcripts and structure 5-chapter audio editions.
@@ -96,8 +105,3 @@ headway/
 - **2026-09-30**: Official rebranding to "Stride".
   - Renamed GitHub repository to `zak-yn/stride`, updated render service to `stride-microlearning`, and updated PWA manifest and UI branding.
 - **2026-09-29**: Initial release of microlearning PWA app.
-  - Architecture: Render deployment ready (`render.yaml`), Upstash Redis REST + local file fallback (`server/db.js`).
-  - AI Engine: Gemini 3.5 Flash Lite (`server/gemini.js`) with resilient fallback.
-  - Seed catalog: 5 curated titles (*Atomic Habits*, *Deep Work*, *Psychology of Money*, *Thinking Fast & Slow*, *Diary of a CEO*).
-  - Audio Engine: SpeechSynthesis with synchronized paragraph highlighting and MediaSession lockscreen controls.
-  - SM-2 Spaced Repetition deck, vertical Shorts feed, and full PWA manifest.
