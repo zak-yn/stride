@@ -25,5 +25,8 @@
     "spaced-repetition"
   ],
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "sharp": "^0.35.5"
+  }
 }

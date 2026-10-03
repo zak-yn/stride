@@ -82,9 +82,9 @@ headway/
 
 ---
 
-- **2026-10-03**: Enforced native English narrator voice & added voice selector modal.
-  - Resolved root cause of Japanese OS default voice (`Microsoft Ayumi`) narrating English summaries by enforcing strict language tags (`en-US`/`en-GB`) and priority filtering.
-  - Added Reader Voice Accent Modal (`#voice-modal`) with 1-tap `▶ Test` auditioning and persistence (`localStorage: stride_narrator_voice`).
+- **2026-10-03**: Production App Icon Suite & Native English Voice Engine.
+  - Designed & rendered high-res brand icon suite (`icon-512.png`, `icon-192.png`, `icon-maskable-512.png`, `apple-touch-icon.png`, `favicon.ico`) with open book + forward-stride "S" in signature electric yellow and dark obsidian.
+  - Enforced native English voice (`en-US`/`en-GB`) with interactive Voice Accent selector modal.
 - **2026-09-30**: Official rebranding to "Stride".
   - Renamed GitHub repository to `zak-yn/stride`, updated render service to `stride-microlearning`, and updated PWA manifest and UI branding.
 - **2026-09-29**: Initial release of microlearning PWA app.

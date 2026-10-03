@@ -1,4 +1,4 @@
-const CACHE_NAME = 'stride-v2';
+const CACHE_NAME = 'stride-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -6,7 +6,12 @@ const STATIC_ASSETS = [
   '/js/icons.js',
   '/js/audioEngine.js',
   '/js/app.js',
-  '/manifest.webmanifest'
+  '/manifest.webmanifest',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-maskable-512.png',
+  '/icons/apple-touch-icon.png',
+  '/favicon.ico'
 ];
 
 self.addEventListener('install', (e) => {
