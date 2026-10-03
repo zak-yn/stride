@@ -18,7 +18,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet" href="/css/style.css?v=5">
+  <link rel="stylesheet" href="/css/style.css?v=6">
 </head>
 <body>
   <div id="app-shell">
@@ -220,7 +220,7 @@
         </div>
       </section>
 
-      <!-- TAB 5: AI STUDIO (Gemini 3.5 Flash Lite Ingestion) -->
+      <!-- TAB 5: AI STUDIO (YouTube Search & Gemini 3.5 Flash Lite Ingestion) -->
       <section class="tab-pane" id="tab-studio">
         <div class="section-header">
           <div>
@@ -229,51 +229,88 @@
           </div>
         </div>
 
-        <div class="studio-card">
-          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5;">
-            Input any book title, podcast topic, or raw YouTube transcript. Gemini 3.5 Flash Lite synthesizes a structured 5-chapter microlearning edition with SM-2 flashcards and scenario quizzes.
-          </p>
+        <!-- Studio Mode Switcher -->
+        <div class="studio-mode-switcher">
+          <button class="studio-mode-btn active" id="btn-mode-yt" data-mode="youtube">
+            <span id="icon-studio-yt"></span> YouTube In-App Search
+          </button>
+          <button class="studio-mode-btn" id="btn-mode-direct" data-mode="direct">
+            <span id="icon-studio-direct"></span> Direct URL or Book
+          </button>
+        </div>
 
-          <div class="form-group">
-            <label class="form-label" for="studio-input">Book Title, Topic, or Transcript</label>
-            <textarea class="form-textarea" id="studio-input" placeholder="e.g. 'Man's Search for Meaning by Viktor Frankl' or paste full podcast transcript..."></textarea>
+        <!-- MODE 1: YouTube In-App Search & 1-Tap Summarization -->
+        <div id="studio-yt-panel" class="studio-panel">
+          <div class="yt-search-box">
+            <input type="text" class="form-input" id="yt-search-input" placeholder="Search YouTube (e.g. 嫌われる勇気, Huberman, Steve Jobs...)" autocomplete="off">
+            <button class="btn-primary" id="btn-yt-search" style="padding: 10px 16px; flex-shrink: 0;">
+              <span id="icon-yt-search-btn"></span> Search
+            </button>
           </div>
 
-          <div class="form-group">
-            <label class="form-label" for="studio-language">Output Language</label>
-            <select class="form-select" id="studio-language">
+          <!-- Quick Search Inspiration Pills -->
+          <div class="yt-search-chips" id="yt-chips-container">
+            <button class="chip-pill yt-chip" data-query="嫌われる勇気 解説">嫌われる勇気 解説</button>
+            <button class="chip-pill yt-chip" data-query="Atomic Habits animated summary">Atomic Habits</button>
+            <button class="chip-pill yt-chip" data-query="睡眠の都市伝説 樺沢紫苑">睡眠改善 樺沢紫苑</button>
+            <button class="chip-pill yt-chip" data-query="Steve Jobs Stanford 2005 Commencement">Steve Jobs Stanford</button>
+            <button class="chip-pill yt-chip" data-query="Psychology of Money summary">Psychology of Money</button>
+          </div>
+
+          <!-- Language Selector for YouTube Summaries -->
+          <div style="display: flex; align-items: center; justify-content: space-between; margin: 12px 0 16px;">
+            <label for="yt-output-language" style="font-size: 12px; color: var(--text-secondary); font-weight: 600;">Summary Language:</label>
+            <select class="form-select" id="yt-output-language" style="width: auto; padding: 6px 12px; font-size: 12px;">
+              <option value="Japanese" selected>Japanese (日本語)</option>
               <option value="English">English</option>
-              <option value="Japanese">Japanese (日本語)</option>
             </select>
           </div>
 
-          <button class="btn-primary" id="btn-generate-ai" style="width: 100%; justify-content: center; padding: 12px;">
-            <span id="studio-sparkle-icon"></span> Generate with Gemini 3.5 Flash Lite
-          </button>
-
-          <div id="studio-status-box" style="display: none; margin-top: 14px; padding: 12px; border-radius: var(--radius-md); background: var(--bg-surface-elevated); font-size: 13px; color: var(--brand-amber);">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <div class="spinner" style="width: 14px; height: 14px; border: 2px solid var(--brand-amber); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
-              <span id="studio-status-text">Synthesizing 5 chapters and flashcards...</span>
+          <!-- YouTube Search Results Grid -->
+          <div id="yt-results-container" class="yt-results-grid">
+            <div style="text-align: center; padding: 36px 16px; color: var(--text-muted); font-size: 13px;">
+              Search YouTube above or tap an inspiration pill to find educational talks, book reviews & podcasts to summarize into 15-minute microlearning editions.
             </div>
           </div>
         </div>
 
-        <!-- Sample Ingestion Chips -->
-        <div class="section-header">
-          <h3 style="font-size: 14px; font-weight: 600; color: var(--text-secondary);">One-Tap Ideas to Summarize</h3>
+        <!-- MODE 2: Direct URL / Raw Text Ingestion -->
+        <div id="studio-direct-panel" class="studio-panel" style="display: none;">
+          <div class="studio-card">
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5;">
+              Paste any specific YouTube video URL (e.g. <code>https://youtu.be/...</code>), podcast transcript, or book title to synthesize into a structured 5-chapter edition.
+            </p>
+
+            <div class="form-group">
+              <label class="form-label" for="studio-input">YouTube URL, Book Title, or Topic</label>
+              <textarea class="form-textarea" id="studio-input" placeholder="e.g. https://www.youtube.com/watch?v=... or 'Man's Search for Meaning by Viktor Frankl'"></textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="studio-language">Output Language</label>
+              <select class="form-select" id="studio-language">
+                <option value="Japanese" selected>Japanese (日本語)</option>
+                <option value="English">English</option>
+              </select>
+            </div>
+
+            <button class="btn-primary" id="btn-generate-ai" style="width: 100%; justify-content: center; padding: 12px;">
+              <span id="studio-sparkle-icon"></span> Generate with Gemini 3.5 Flash Lite
+            </button>
+          </div>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 8px;">
-          <button class="btn-secondary btn-sample-idea" data-idea="Essentialism: The Disciplined Pursuit of Less by Greg McKeown" style="justify-content: flex-start; text-align: left;">
-            📖 Essentialism — Greg McKeown
-          </button>
-          <button class="btn-secondary btn-sample-idea" data-idea="Show Your Work! 10 Ways to Share Your Creativity and Get Discovered by Austin Kleon" style="justify-content: flex-start; text-align: left;">
-            🎨 Show Your Work! — Austin Kleon
-          </button>
-          <button class="btn-secondary btn-sample-idea" data-idea="Principles for Dealing with the Changing World Order by Ray Dalio" style="justify-content: flex-start; text-align: left;">
-            🌐 Changing World Order — Ray Dalio
-          </button>
+
+        <!-- Dynamic Live Progress Box -->
+        <div id="studio-status-box" style="display: none; margin-top: 16px; padding: 14px 16px; border-radius: var(--radius-md); background: var(--bg-surface-elevated); border: 1px solid var(--brand-amber); font-size: 13px; color: var(--brand-amber); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="spinner" style="width: 16px; height: 16px; border: 2px solid var(--brand-amber); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0;"></div>
+            <div>
+              <div style="font-weight: 700; margin-bottom: 2px;" id="studio-status-headline">Analyzing YouTube Video...</div>
+              <div style="font-size: 11px; color: var(--text-muted);" id="studio-status-text">Extracting speech transcript & metadata...</div>
+            </div>
+          </div>
         </div>
+
       </section>
 
     </main>
@@ -500,6 +537,6 @@
     }
   </style>
 
-  <script type="module" src="/js/app.js?v=2"></script>
+  <script type="module" src="/js/app.js?v=3"></script>
 </body>
 </html>

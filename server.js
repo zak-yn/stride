@@ -10,6 +10,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { db } from './server/db.js';
 import { geminiSummarizer } from './server/gemini.js';
+import { searchYouTube, extractYouTubeId, fetchVideoDetailsAndTranscript } from './server/youtube.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -105,7 +106,54 @@ app.get('/api/shorts', (req, res) => {
   }
 });
 
-// 6. AI Ingestion Studio: Summarize Book / Podcast / YouTube using Gemini 3.5 Flash Lite
+// 6. YouTube In-App Search & Video Summarization
+app.get('/api/youtube/search', async (req, res) => {
+  try {
+    const q = req.query.q;
+    if (!q || !q.trim()) {
+      return res.json({ success: true, videos: [] });
+    }
+    const videos = await searchYouTube(q);
+    res.json({ success: true, videos });
+  } catch (err) {
+    console.error('YouTube search error:', err.message);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/youtube/summarize', async (req, res) => {
+  try {
+    const { urlOrId, language } = req.body;
+    if (!urlOrId || !urlOrId.trim()) {
+      return res.status(400).json({ success: false, error: 'YouTube URL or Video ID is required' });
+    }
+
+    const videoId = extractYouTubeId(urlOrId);
+    if (!videoId) {
+      return res.status(400).json({ success: false, error: 'Invalid YouTube URL or Video ID' });
+    }
+
+    console.log(`🎬 [YouTube] Fetching details & transcript for video: ${videoId}...`);
+    const videoDetails = await fetchVideoDetailsAndTranscript(videoId);
+
+    console.log(`🤖 [Gemini] Summarizing YouTube video "${videoDetails.title}" with Gemini 3.5 Flash Lite...`);
+    const summaryData = await geminiSummarizer.summarizeYouTubeVideo(
+      videoDetails,
+      language || 'Japanese'
+    );
+
+    // Save directly to catalog
+    await db.saveBook(summaryData);
+
+    console.log(`✨ [Gemini] Successfully generated microlearning edition for "${summaryData.title}"!`);
+    res.json({ success: true, book: summaryData });
+  } catch (err) {
+    console.error('❌ [YouTube Summarize] Error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 7. General AI Ingestion Studio: Summarize Book / Podcast / Transcript / YouTube
 app.post('/api/generate', async (req, res) => {
   try {
     const { input, language } = req.body;
@@ -113,11 +161,20 @@ app.post('/api/generate', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Input is required' });
     }
 
-    console.log(`🤖 [Gemini] Generating microlearning summary for: "${input.slice(0, 60)}..."`);
-    const summaryData = await geminiSummarizer.summarizeContent({
-      input: input.trim(),
-      language: language || 'English'
-    });
+    const ytId = extractYouTubeId(input);
+    let summaryData;
+
+    if (ytId) {
+      console.log(`🎬 [Gemini] Detected YouTube input (${ytId}). Extracting transcript & metadata...`);
+      const videoDetails = await fetchVideoDetailsAndTranscript(ytId);
+      summaryData = await geminiSummarizer.summarizeYouTubeVideo(videoDetails, language || 'Japanese');
+    } else {
+      console.log(`🤖 [Gemini] Generating microlearning summary for: "${input.slice(0, 60)}..."`);
+      summaryData = await geminiSummarizer.summarizeContent({
+        input: input.trim(),
+        language: language || 'English'
+      });
+    }
 
     // Save directly to catalog
     await db.saveBook(summaryData);

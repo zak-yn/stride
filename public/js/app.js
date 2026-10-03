@@ -112,6 +112,13 @@ class HeadwayApp {
 
     const searchIconSlot = document.getElementById('search-icon-slot');
     if (searchIconSlot) searchIconSlot.innerHTML = icons.search(16);
+
+    const iconStudioYt = document.getElementById('icon-studio-yt');
+    if (iconStudioYt) iconStudioYt.innerHTML = icons.youtube(15);
+    const iconStudioDirect = document.getElementById('icon-studio-direct');
+    if (iconStudioDirect) iconStudioDirect.innerHTML = icons.book(15);
+    const iconYtSearchBtn = document.getElementById('icon-yt-search-btn');
+    if (iconYtSearchBtn) iconYtSearchBtn.innerHTML = icons.search(14);
   }
 
   setupNavigation() {
@@ -248,17 +255,54 @@ class HeadwayApp {
       await this.fetchFlashcards(false); // fetch all
     });
 
-    // AI Studio: Generate
-    document.getElementById('btn-generate-ai')?.addEventListener('click', async () => {
-      await this.handleAIGeneration();
+    // AI Studio: Mode Switcher
+    const btnModeYt = document.getElementById('btn-mode-yt');
+    const btnModeDirect = document.getElementById('btn-mode-direct');
+    const panelYt = document.getElementById('studio-yt-panel');
+    const panelDirect = document.getElementById('studio-direct-panel');
+
+    btnModeYt?.addEventListener('click', () => {
+      btnModeYt.classList.add('active');
+      btnModeDirect?.classList.remove('active');
+      if (panelYt) panelYt.style.display = 'block';
+      if (panelDirect) panelDirect.style.display = 'none';
     });
 
-    // Sample Idea chips
-    document.querySelectorAll('.btn-sample-idea').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const input = document.getElementById('studio-input');
-        if (input) input.value = btn.dataset.idea;
+    btnModeDirect?.addEventListener('click', () => {
+      btnModeDirect.classList.add('active');
+      btnModeYt?.classList.remove('active');
+      if (panelDirect) panelDirect.style.display = 'block';
+      if (panelYt) panelYt.style.display = 'none';
+    });
+
+    // YouTube In-App Search
+    const ytSearchInput = document.getElementById('yt-search-input');
+    const btnYtSearch = document.getElementById('btn-yt-search');
+
+    btnYtSearch?.addEventListener('click', () => {
+      this.handleYouTubeSearch();
+    });
+
+    ytSearchInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.handleYouTubeSearch();
+      }
+    });
+
+    // YouTube Search Chips
+    document.querySelectorAll('.yt-chip').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        if (ytSearchInput) {
+          ytSearchInput.value = chip.dataset.query;
+          this.handleYouTubeSearch();
+        }
       });
+    });
+
+    // AI Studio: Direct Generate
+    document.getElementById('btn-generate-ai')?.addEventListener('click', async () => {
+      await this.handleAIGeneration();
     });
 
     // Settings Modal
@@ -887,26 +931,187 @@ class HeadwayApp {
     });
   }
 
-  // --- AI Ingestion Studio (Gemini 3.5 Flash Lite) ---
+  // --- AI Ingestion Studio: YouTube Search & Gemini 3.5 Flash Lite ---
+
+  async handleYouTubeSearch() {
+    const input = document.getElementById('yt-search-input');
+    const container = document.getElementById('yt-results-container');
+    const btn = document.getElementById('btn-yt-search');
+    const query = input?.value.trim();
+
+    if (!query) {
+      input?.focus();
+      return;
+    }
+
+    if (btn) {
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
+    }
+
+    if (container) {
+      container.innerHTML = `
+        <div style="text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 13px;">
+          <div class="spinner" style="width: 22px; height: 22px; border: 2px solid var(--brand-amber); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 12px;"></div>
+          Searching YouTube for "${query}"...
+        </div>
+      `;
+    }
+
+    try {
+      const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(query)}`);
+      const data = await res.json();
+
+      if (btn) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+      }
+
+      if (!data.success || !data.videos || data.videos.length === 0) {
+        if (container) {
+          container.innerHTML = `
+            <div style="text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 13px;">
+              No YouTube videos found for "${query}". Try different keywords.
+            </div>
+          `;
+        }
+        return;
+      }
+
+      this.renderYouTubeSearchResults(data.videos);
+    } catch (err) {
+      console.error('[YouTube Search] Failed:', err);
+      if (btn) {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+      }
+      if (container) {
+        container.innerHTML = `
+          <div style="text-align: center; padding: 40px 20px; color: #EF4444; font-size: 13px;">
+            Search failed: ${err.message}. Please try again.
+          </div>
+        `;
+      }
+    }
+  }
+
+  renderYouTubeSearchResults(videos) {
+    const container = document.getElementById('yt-results-container');
+    if (!container) return;
+
+    container.innerHTML = videos.map((v) => `
+      <div class="yt-video-card" data-video-id="${v.videoId}">
+        <div class="yt-card-row">
+          <div class="yt-thumb-wrapper">
+            <img class="yt-thumb-img" src="${v.thumbnail}" alt="${v.title}" loading="lazy" onerror="this.src='https://img.youtube.com/vi/${v.videoId}/hqdefault.jpg'">
+            ${v.length ? `<span class="yt-duration-pill">${v.length}</span>` : ''}
+          </div>
+          <div class="yt-card-content">
+            <div class="yt-card-title" title="${v.title}">${v.title}</div>
+            <div class="yt-card-meta">
+              <span>${v.channel || 'YouTube'}</span>
+              ${v.views ? `<span>• ${v.views}</span>` : ''}
+            </div>
+          </div>
+        </div>
+        <div class="yt-card-footer">
+          <button class="yt-summarize-btn" data-video-id="${v.videoId}" data-title="${encodeURIComponent(v.title)}">
+            <span>✨</span> Summarize with Gemini
+          </button>
+        </div>
+      </div>
+    `).join('');
+
+    // Bind Summarize buttons
+    container.querySelectorAll('.yt-summarize-btn').forEach((btn) => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const vId = btn.dataset.videoId;
+        const rawTitle = decodeURIComponent(btn.dataset.title || 'YouTube Video');
+        await this.handleYouTubeSummarize(vId, rawTitle);
+      });
+    });
+  }
+
+  async handleYouTubeSummarize(videoId, videoTitle) {
+    const statusBox = document.getElementById('studio-status-box');
+    const statusHeadline = document.getElementById('studio-status-headline');
+    const statusText = document.getElementById('studio-status-text');
+    const langSelect = document.getElementById('yt-output-language');
+    const selectedLang = langSelect ? langSelect.value : 'Japanese';
+
+    if (statusBox) {
+      statusBox.style.display = 'block';
+      if (statusHeadline) statusHeadline.innerText = `Summarizing: ${videoTitle.slice(0, 40)}...`;
+      if (statusText) statusText.innerText = 'Extracting spoken transcript & video structure...';
+      statusBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // Step 2 indicator after 2.5s
+    const step2Timer = setTimeout(() => {
+      if (statusText) statusText.innerText = 'Gemini 3.5 Flash Lite synthesizing 5 microlearning chapters & SM-2 flashcards...';
+    }, 2500);
+
+    try {
+      const res = await fetch('/api/youtube/summarize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          urlOrId: videoId,
+          language: selectedLang
+        })
+      });
+
+      clearTimeout(step2Timer);
+      const data = await res.json();
+
+      if (!data.success || !data.book) {
+        throw new Error(data.error || 'Failed to summarize YouTube video');
+      }
+
+      if (statusHeadline) statusHeadline.innerText = `🎉 Successfully Created Edition!`;
+      if (statusText) statusText.innerText = `"${data.book.title}" ready with 5 chapters & flashcards. Opening player...`;
+
+      // Refresh catalog and flashcards
+      await this.fetchBooks();
+      await this.fetchFlashcards();
+      await this.fetchShorts();
+
+      setTimeout(() => {
+        if (statusBox) statusBox.style.display = 'none';
+        // Open reader and start playback immediately
+        this.openReader(data.book, 1, true);
+      }, 1200);
+    } catch (err) {
+      clearTimeout(step2Timer);
+      console.error('[YouTube Summarize] Error:', err);
+      alert(`YouTube Summarization Failed: ${err.message}`);
+      if (statusBox) statusBox.style.display = 'none';
+    }
+  }
 
   async handleAIGeneration() {
     const inputEl = document.getElementById('studio-input');
     const langEl = document.getElementById('studio-language');
     const btn = document.getElementById('btn-generate-ai');
     const statusBox = document.getElementById('studio-status-box');
+    const statusHeadline = document.getElementById('studio-status-headline');
     const statusText = document.getElementById('studio-status-text');
 
     const inputVal = inputEl?.value.trim();
     if (!inputVal) {
-      alert('Please enter a book title, topic, or podcast transcript first.');
+      alert('Please enter a YouTube URL, book title, or topic first.');
       inputEl?.focus();
       return;
     }
 
     btn.disabled = true;
     btn.style.opacity = '0.6';
-    statusBox.style.display = 'block';
-    statusText.innerText = 'Calling Gemini 3.5 Flash Lite to structure chapters, SM-2 cards & quizzes...';
+    if (statusBox) {
+      statusBox.style.display = 'block';
+      if (statusHeadline) statusHeadline.innerText = 'Synthesizing with Gemini 3.5 Flash Lite...';
+      if (statusText) statusText.innerText = 'Extracting insights and formatting 5 chapters & SM-2 cards...';
+    }
 
     try {
       const res = await fetch('/api/generate', {
@@ -914,16 +1119,17 @@ class HeadwayApp {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           input: inputVal,
-          language: langEl ? langEl.value : 'English'
+          language: langEl ? langEl.value : 'Japanese'
         })
       });
 
       const data = await res.json();
       if (!data.success || !data.book) {
-        throw new Error(data.error || 'Failed to synthesize book');
+        throw new Error(data.error || 'Failed to synthesize edition');
       }
 
-      statusText.innerText = `🎉 Successfully generated "${data.book.title}"!`;
+      if (statusHeadline) statusHeadline.innerText = `🎉 Successfully Generated!`;
+      if (statusText) statusText.innerText = `"${data.book.title}" created. Opening reader...`;
 
       // Refresh catalog and flashcards
       await this.fetchBooks();
@@ -933,17 +1139,16 @@ class HeadwayApp {
       inputEl.value = '';
 
       setTimeout(() => {
-        statusBox.style.display = 'none';
+        if (statusBox) statusBox.style.display = 'none';
         btn.disabled = false;
         btn.style.opacity = '1';
 
-        // Switch to today tab and open reader
-        document.getElementById('nav-today')?.click();
+        // Open reader
         this.openReader(data.book, 1, true);
       }, 1200);
     } catch (err) {
       alert(`AI Generation Failed: ${err.message}`);
-      statusBox.style.display = 'none';
+      if (statusBox) statusBox.style.display = 'none';
       btn.disabled = false;
       btn.style.opacity = '1';
     }

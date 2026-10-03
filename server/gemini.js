@@ -188,6 +188,36 @@ ${input.slice(0, 50000)}
 
     return parsed;
   }
+
+  async summarizeYouTubeVideo({ videoId, title, author, description, transcript, thumbnail, videoUrl }, language = 'Japanese') {
+    const inputContent = `
+YOUTUBE VIDEO INFORMATION:
+- Video Title: ${title}
+- Channel / Speaker: ${author}
+- Video URL: ${videoUrl}
+
+${transcript && transcript.length > 50 ? `SPOKEN SPEECH TRANSCRIPT:\n${transcript.slice(0, 48000)}` : `VIDEO DESCRIPTION & OUTLINE:\n${description}`}
+`;
+
+    const summary = await this.summarizeContent({
+      input: inputContent,
+      language
+    });
+
+    // Attach YouTube-specific metadata
+    summary.sourceType = 'youtube';
+    summary.youtube = {
+      videoId,
+      videoUrl,
+      thumbnail
+    };
+    if (thumbnail) {
+      summary.coverImage = thumbnail;
+    }
+
+    return summary;
+  }
 }
 
 export const geminiSummarizer = new GeminiSummarizer();
+

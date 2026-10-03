@@ -29,6 +29,7 @@ headway/
 ├── server/
 │   ├── db.js              # Upstash Redis REST + local file storage layer
 │   ├── gemini.js          # Gemini 3.5 Flash Lite summarization & structured extractor
+│   ├── youtube.js         # In-app YouTube search & multi-language transcript extractor
 │   └── seedData.js        # 5 curated editorial books with chapters, flashcards & quizzes
 ├── server.js              # Express API & static server (port 3000)
 ├── render.yaml            # Render blueprint deployment configuration
@@ -49,6 +50,8 @@ headway/
 | `GET` | `/api/flashcards?due=true` | Returns flashcards scheduled for review |
 | `POST` | `/api/flashcards/:id/review` | Updates card interval using SuperMemo-2 (Hard/Good/Easy) |
 | `GET` | `/api/shorts` | Vertical reels of micro-insights & interactive scenario quizzes |
+| `GET` | `/api/youtube/search?q=` | In-app YouTube video search (title, duration, views, thumb) |
+| `POST` | `/api/youtube/summarize` | Extracts speech transcript & generates 5 chapters + SM-2 cards |
 | `GET` | `/api/status` | System health, Upstash connection status & Gemini model info |
 
 ---
@@ -72,16 +75,20 @@ headway/
 
 ## 6. Verification Loop
 1. `npm start` (or `node server.js`): Ensure server starts on port 3000 with 0 errors.
-2. Verify `/api/status`, `/api/books`, `/api/flashcards`, and `/api/progress`.
+2. Verify `/api/status`, `/api/books`, `/api/flashcards`, `/api/youtube/search`, and `/api/progress`.
 3. Sensor check UI via headless browser or Playwright:
    - Check Today tab, Daily Goal ring, and Hero Pick.
    - Test Audio Reader modal playback & sentence highlighting.
+   - Test YouTube in-app search & 1-tap summarization flow in AI Studio.
    - Test 3D Flashcard flip and SM-2 review rating submission.
    - Test Shorts vertical reels and interactive scenario quiz.
-   - Test AI Studio with Gemini 3.5 Flash Lite.
 
 ---
 
+- **2026-10-04**: YouTube In-App Search & Video Transcript Summarization.
+  - Built `server/youtube.js` for real-time video search & automatic subtitle/speech transcript extraction (JA/EN).
+  - Wired Gemini 3.5 Flash Lite to ingest full video speech transcripts and structure 5-chapter audio editions.
+  - Added in-app YouTube Search Studio with video thumbnail preview, duration badges, and 1-tap "✨ Summarize with Gemini".
 - **2026-10-03**: Production App Icon Suite & Native English Voice Engine.
   - Designed & rendered high-res brand icon suite (`icon-512.png`, `icon-192.png`, `icon-maskable-512.png`, `apple-touch-icon.png`, `favicon.ico`) with open book + forward-stride "S" in signature electric yellow and dark obsidian.
   - Enforced native English voice (`en-US`/`en-GB`) with interactive Voice Accent selector modal.
