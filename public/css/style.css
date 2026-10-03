@@ -1142,15 +1142,40 @@ body {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding-bottom: 8px;
+  padding: 4px 0 12px;
   scrollbar-width: none;
 }
 .yt-search-chips::-webkit-scrollbar { display: none; }
 
 .yt-chip {
-  cursor: pointer;
-  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-surface-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  padding: 6px 14px;
   font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.yt-chip:hover {
+  background: var(--bg-surface-active);
+  color: var(--text-primary);
+  border-color: rgba(255, 222, 48, 0.4);
+  transform: translateY(-1px);
+}
+
+.yt-chip:active {
+  transform: scale(0.97);
+  background: rgba(255, 222, 48, 0.12);
+  border-color: var(--brand-yellow);
 }
 
 .yt-results-grid {

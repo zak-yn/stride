@@ -1038,7 +1038,7 @@ class HeadwayApp {
     const statusHeadline = document.getElementById('studio-status-headline');
     const statusText = document.getElementById('studio-status-text');
     const langSelect = document.getElementById('yt-output-language');
-    const selectedLang = langSelect ? langSelect.value : 'Japanese';
+    const selectedLang = langSelect ? langSelect.value : 'English';
 
     if (statusBox) {
       statusBox.style.display = 'block';
@@ -1119,7 +1119,7 @@ class HeadwayApp {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           input: inputVal,
-          language: langEl ? langEl.value : 'Japanese'
+          language: langEl ? langEl.value : 'English'
         })
       });
 

@@ -189,7 +189,7 @@ ${input.slice(0, 50000)}
     return parsed;
   }
 
-  async summarizeYouTubeVideo({ videoId, title, author, description, transcript, thumbnail, videoUrl }, language = 'Japanese') {
+  async summarizeYouTubeVideo({ videoId, title, author, description, transcript, thumbnail, videoUrl }, language = 'English') {
     const inputContent = `
 YOUTUBE VIDEO INFORMATION:
 - Video Title: ${title}

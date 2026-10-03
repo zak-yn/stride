@@ -85,10 +85,11 @@ headway/
 
 ---
 
-- **2026-10-04**: YouTube In-App Search & Video Transcript Summarization.
+- **2026-10-04**: YouTube In-App Search, Video Summarization & English Default.
   - Built `server/youtube.js` for real-time video search & automatic subtitle/speech transcript extraction (JA/EN).
   - Wired Gemini 3.5 Flash Lite to ingest full video speech transcripts and structure 5-chapter audio editions.
   - Added in-app YouTube Search Studio with video thumbnail preview, duration badges, and 1-tap "✨ Summarize with Gemini".
+  - Refined keyword inspiration chips to match architectural dark aesthetic (`#20242D`, hairline borders); set default summary language to English.
 - **2026-10-03**: Production App Icon Suite & Native English Voice Engine.
   - Designed & rendered high-res brand icon suite (`icon-512.png`, `icon-192.png`, `icon-maskable-512.png`, `apple-touch-icon.png`, `favicon.ico`) with open book + forward-stride "S" in signature electric yellow and dark obsidian.
   - Enforced native English voice (`en-US`/`en-GB`) with interactive Voice Accent selector modal.

@@ -139,7 +139,7 @@ app.post('/api/youtube/summarize', async (req, res) => {
     console.log(`🤖 [Gemini] Summarizing YouTube video "${videoDetails.title}" with Gemini 3.5 Flash Lite...`);
     const summaryData = await geminiSummarizer.summarizeYouTubeVideo(
       videoDetails,
-      language || 'Japanese'
+      language || 'English'
     );
 
     // Save directly to catalog
@@ -167,7 +167,7 @@ app.post('/api/generate', async (req, res) => {
     if (ytId) {
       console.log(`🎬 [Gemini] Detected YouTube input (${ytId}). Extracting transcript & metadata...`);
       const videoDetails = await fetchVideoDetailsAndTranscript(ytId);
-      summaryData = await geminiSummarizer.summarizeYouTubeVideo(videoDetails, language || 'Japanese');
+      summaryData = await geminiSummarizer.summarizeYouTubeVideo(videoDetails, language || 'English');
     } else {
       console.log(`🤖 [Gemini] Generating microlearning summary for: "${input.slice(0, 60)}..."`);
       summaryData = await geminiSummarizer.summarizeContent({
