@@ -86,11 +86,12 @@ export const STUDIO_VOICES = [
   }
 ];
 
+const ttsAudioCache = new Map();
+const inFlightRequests = new Map();
+const MAX_CACHE_ITEMS = 600;
+
 class TTSService {
-  constructor() {
-    this.ttsClient = new MsEdgeTTS();
-    this.currentVoice = null;
-  }
+  constructor() {}
 
   getCuratedVoices() {
     return STUDIO_VOICES;
@@ -110,22 +111,61 @@ class TTSService {
     return 'en-US-AndrewNeural';
   }
 
-  // Synthesize text to an audio stream
-  async synthesizeToStream(text, voiceId = 'en-US-AndrewNeural') {
+  // Synthesize text to a buffered MP3 (enables exact Content-Length, seeking & 0ms repeats)
+  async synthesizeToBuffer(text, voiceId = 'en-US-AndrewNeural') {
     const cleanText = text.trim();
     if (!cleanText) {
       throw new Error('Empty text cannot be synthesized');
     }
 
     const targetVoice = this.resolveVoiceForText(cleanText, voiceId);
+    const cacheKey = `${targetVoice}::${cleanText}`;
 
-    // Initialize or switch voice metadata
-    if (this.currentVoice !== targetVoice) {
-      await this.ttsClient.setMetadata(targetVoice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
-      this.currentVoice = targetVoice;
+    if (ttsAudioCache.has(cacheKey)) {
+      return { buffer: ttsAudioCache.get(cacheKey), voiceId: targetVoice };
     }
 
-    const { audioStream } = this.ttsClient.toStream(cleanText);
+    if (inFlightRequests.has(cacheKey)) {
+      const buffer = await inFlightRequests.get(cacheKey);
+      return { buffer, voiceId: targetVoice };
+    }
+
+    const synthPromise = (async () => {
+      const client = new MsEdgeTTS();
+      await client.setMetadata(targetVoice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3, {});
+      const { audioStream } = client.toStream(cleanText);
+      const chunks = [];
+
+      await new Promise((resolve, reject) => {
+        audioStream.on('data', chunk => chunks.push(chunk));
+        audioStream.on('end', resolve);
+        audioStream.on('error', reject);
+      });
+
+      const buffer = Buffer.concat(chunks);
+      if (ttsAudioCache.size >= MAX_CACHE_ITEMS) {
+        const firstKey = ttsAudioCache.keys().next().value;
+        ttsAudioCache.delete(firstKey);
+      }
+      ttsAudioCache.set(cacheKey, buffer);
+      return buffer;
+    })();
+
+    inFlightRequests.set(cacheKey, synthPromise);
+
+    try {
+      const buffer = await synthPromise;
+      return { buffer, voiceId: targetVoice };
+    } finally {
+      inFlightRequests.delete(cacheKey);
+    }
+  }
+
+  // Synthesize text to an audio stream (legacy compatibility)
+  async synthesizeToStream(text, voiceId = 'en-US-AndrewNeural') {
+    const { buffer, voiceId: targetVoice } = await this.synthesizeToBuffer(text, voiceId);
+    const { Readable } = await import('stream');
+    const audioStream = Readable.from(buffer);
     return { audioStream, voiceId: targetVoice };
   }
 }

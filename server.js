@@ -121,11 +121,13 @@ app.get('/api/tts', async (req, res) => {
       return res.status(400).send('Text parameter is required');
     }
 
-    const { audioStream } = await ttsService.synthesizeToStream(text, voice);
+    const { buffer } = await ttsService.synthesizeToBuffer(text, voice);
 
     res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Length', buffer.length);
+    res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Cache-Control', 'public, max-age=86400');
-    audioStream.pipe(res);
+    return res.end(buffer);
   } catch (err) {
     console.error('[TTS API Error]:', err.message);
     if (!res.headersSent) {

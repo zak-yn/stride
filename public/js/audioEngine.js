@@ -1,10 +1,11 @@
 /**
  * Stride Synchronized Studio Audio & Reader Engine
- * Hybrid Architecture:
+ * Robust Architecture:
  * 1. Microsoft Azure Studio Neural TTS (/api/tts) for ultra-natural, human-grade audiobook narration.
- * 2. High-speed lookahead paragraph preloader for zero-latency gapless playback.
- * 3. Fallback to Web Speech API when offline.
- * 4. Lockscreen MediaSession API + SM-2 Progress Sync.
+ * 2. Single HTMLAudioElement pipeline with session IDs to prevent duplicate playback & race conditions.
+ * 3. Low-priority HTTP cache preloading for zero-latency, seamless gapless paragraph playback.
+ * 4. Absolute mutual exclusion between Studio Audio and legacy SpeechSynthesis (never overlaps).
+ * 5. Lockscreen MediaSession API + SM-2 habit tracking.
  */
 
 export const STUDIO_NEURAL_VOICES = [
@@ -107,11 +108,13 @@ export class AudioEngine {
     this.accumulatedSeconds = 0;
     this.progressSyncInterval = null;
 
-    // Active HTML5 Audio Element for Studio Neural Playback
-    this.currentAudio = null;
+    // Concurrency & state protection
+    this.playSessionId = 0;
+    this.isTransitioning = false;
+
+    // Single dedicated HTMLAudioElement for all playback
+    this.audioEl = typeof Audio !== 'undefined' ? new Audio() : null;
     this.sampleAudio = null;
-    this.preloadedAudio = null;
-    this.preloadedIdx = -1;
 
     // Browser SpeechSynthesis fallback
     this.synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
@@ -123,23 +126,67 @@ export class AudioEngine {
       : null;
     this.selectedVoiceName = savedVoice || 'en-US-AndrewNeural';
 
-    this.useStudioNeural = true; // Use studio neural TTS by default
+    this.useStudioNeural = true;
     this.availableVoices = [];
 
+    this._initAudioElement();
     this._initVoices();
     this._initMediaSession();
   }
 
+  _initAudioElement() {
+    if (!this.audioEl) return;
+
+    this.audioEl.addEventListener('play', () => {
+      this.isPlaying = true;
+      this.isTransitioning = false;
+      this._startProgressLogger();
+      this.onSentenceChange(this.activeParagraphIdx);
+      this.onStateChange({
+        isPlaying: true,
+        paragraphIdx: this.activeParagraphIdx,
+        totalParagraphs: this.paragraphs.length
+      });
+
+      // Low-priority HTTP prefetch of next paragraph to ensure 0ms gapless transition
+      this._prefetchParagraph(this.activeParagraphIdx + 1);
+    });
+
+    this.audioEl.addEventListener('ended', () => {
+      if (!this.isTransitioning) {
+        this._advanceToNextParagraph(this.activeParagraphIdx + 1);
+      }
+    });
+
+    this.audioEl.addEventListener('pause', () => {
+      // If the audio paused because it naturally reached the end, ignore so ended event advances cleanly
+      if (this.audioEl.ended) return;
+
+      // Ignore transient pause events fired during src switching
+      if (!this.isTransitioning) {
+        this.isPlaying = false;
+        this._stopProgressLogger();
+        this.onStateChange({ isPlaying: false });
+      }
+    });
+
+    this.audioEl.addEventListener('error', (e) => {
+      console.warn('[AudioEngine] HTMLAudioElement error event:', e);
+      if (this.isPlaying && !this.isTransitioning) {
+        this._speakWithSpeechSynthesis(this.activeParagraphIdx, this.paragraphs[this.activeParagraphIdx]);
+      }
+    });
+  }
+
   async _initVoices() {
-    // Try fetching updated voices list from server
     try {
       const res = await fetch('/api/tts/voices');
       const data = await res.json();
       if (data.success && data.voices) {
-        // sync
+        // Voices active on server
       }
     } catch (e) {
-      // offline or local
+      // Offline
     }
 
     if (this.synth) {
@@ -173,7 +220,7 @@ export class AudioEngine {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: chapter ? `${chapter.chapterIndex}. ${chapter.title}` : this.currentBook.title,
         artist: this.currentBook.author,
-        album: this.currentBook.title,
+        album: 'Stride Microlearning Books & Audio',
         artwork: [
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' }
@@ -183,29 +230,27 @@ export class AudioEngine {
   }
 
   getGroupedVoices() {
-    // Studio Neural Voices
     const studioEn = STUDIO_NEURAL_VOICES.filter(v => v.lang.startsWith('en'));
     const studioJa = STUDIO_NEURAL_VOICES.filter(v => v.lang.startsWith('ja'));
-
-    // Local system voices as secondary fallback
     const allLocal = this.synth ? this.synth.getVoices() : [];
-    const localEn = allLocal.filter(v => v.lang.startsWith('en'));
-    const localJa = allLocal.filter(v => v.lang.startsWith('ja'));
-
-    const formatLocalLabel = (v) => {
-      const isUk = v.lang.includes('GB') || v.lang.includes('UK');
-      const flag = isUk ? '🇬🇧' : '🇺🇸';
-      const cleanName = v.name
-        .replace(/Microsoft\s+/g, '')
-        .replace(/\s+Desktop/g, '');
-      return `${flag} ${cleanName} (System)`;
-    };
 
     return {
-      studioEnglish: studioEn.map(v => ({ id: v.id, name: v.id, label: v.label, desc: v.style, isStudio: true })),
-      studioJapanese: studioJa.map(v => ({ id: v.id, name: v.id, label: v.label, desc: v.style, isStudio: true })),
-      localEnglish: localEn.slice(0, 4).map(v => ({ id: v.name, name: v.name, label: formatLocalLabel(v), isStudio: false })),
-      localJapanese: localJa.slice(0, 2).map(v => ({ id: v.name, name: v.name, label: `🇯🇵 ${v.name.replace(/Microsoft\s+/g, '')} (System)`, isStudio: false })),
+      studioEnglish: studioEn,
+      studioJapanese: studioJa,
+      localEnglish: allLocal.filter(v => v.lang.startsWith('en')).map(v => ({
+        id: v.name,
+        name: v.name,
+        label: `${v.name} (${v.lang})`,
+        lang: v.lang,
+        isStudio: false
+      })),
+      localJapanese: allLocal.filter(v => v.lang.startsWith('ja')).map(v => ({
+        id: v.name,
+        name: v.name,
+        label: `${v.name} (${v.lang})`,
+        lang: v.lang,
+        isStudio: false
+      })),
       current: this.selectedVoiceName
     };
   }
@@ -215,38 +260,38 @@ export class AudioEngine {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem('stride_narrator_voice', voiceId);
     }
-    // If currently playing, restart current paragraph with new voice
-    if (this.isPlaying) {
+    // If actively playing, restart current paragraph with new narrator
+    if (this.isPlaying && this.activeParagraphIdx >= 0) {
       this._speakParagraph(this.activeParagraphIdx);
     }
   }
 
   sampleVoice(voiceId) {
-    this.stopSample();
+    this.stop(); // Halt any existing playback cleanly
 
     const isStudio = STUDIO_NEURAL_VOICES.some(v => v.id === voiceId);
-    const isJa = voiceId.includes('ja') || voiceId.includes('Japanese') || voiceId.includes('Nanami') || voiceId.includes('Keita');
-
+    const isJa = voiceId.includes('ja') || voiceId.includes('Nanami') || voiceId.includes('Keita');
     const sampleText = isJa
-      ? 'こんにちは。こちらは Stride のスタジオAIナレーターです。自然な発音で要約をお届けします。'
+      ? 'こんにちは。Strideのスタジオナレーターです。毎日の成長と読書をサポートします。'
       : 'Hello! I am your studio narrator for Stride. Daily microlearning made effortless and engaging.';
 
     if (isStudio) {
+      if (this.sampleAudio) {
+        this.sampleAudio.pause();
+        this.sampleAudio = null;
+      }
       const audioUrl = `/api/tts?text=${encodeURIComponent(sampleText)}&voice=${encodeURIComponent(voiceId)}`;
       this.sampleAudio = new Audio(audioUrl);
       this.sampleAudio.playbackRate = this.playbackRate;
-      this.sampleAudio.play().catch(e => console.warn('[TTS Sample] Play error:', e));
-    } else {
-      // Local SpeechSynthesis fallback
-      if (!this.synth) return;
+      this.sampleAudio.play().catch(e => {
+        if (e.name !== 'AbortError') console.warn('[AudioEngine] Sample play failed:', e);
+      });
+    } else if (this.synth) {
       this.synth.cancel();
       const voices = this.synth.getVoices();
       const v = voices.find(item => item.name === voiceId);
-      if (!v) return;
-
       const utt = new SpeechSynthesisUtterance(sampleText);
-      utt.voice = v;
-      utt.lang = v.lang;
+      if (v) utt.voice = v;
       utt.rate = this.playbackRate;
       this.synth.speak(utt);
     }
@@ -259,6 +304,7 @@ export class AudioEngine {
     }
     if (this.synth) {
       this.synth.cancel();
+      this.activeUtterance = null;
     }
   }
 
@@ -283,9 +329,9 @@ export class AudioEngine {
     this.onStateChange({
       book: this.currentBook,
       chapter: this.getCurrentChapter(),
-      isPlaying: this.isPlaying,
+      isPlaying: false,
       rate: this.playbackRate,
-      paragraphIdx: this.activeParagraphIdx,
+      paragraphIdx: 0,
       totalParagraphs: this.paragraphs.length
     });
   }
@@ -296,28 +342,36 @@ export class AudioEngine {
   }
 
   play() {
-    if (!this.currentBook) return;
-    if (this.currentAudio && this.currentAudio.paused) {
-      this.currentAudio.play().then(() => {
-        this.isPlaying = true;
-        this._startProgressLogger();
-        this.onStateChange({ isPlaying: true });
-      }).catch(() => {
-        this._speakParagraph(this.activeParagraphIdx);
+    if (!this.currentBook || this.paragraphs.length === 0) return;
+
+    // If audio is already loaded and paused mid-paragraph, simply resume it
+    if (this.audioEl && this.audioEl.src && this.audioEl.paused && this.audioEl.currentTime > 0 && !this.audioEl.ended) {
+      this.isPlaying = true;
+      this.audioEl.play().catch(e => {
+        if (e.name !== 'AbortError') {
+          this._speakParagraph(this.activeParagraphIdx);
+        }
       });
       return;
     }
+
     this._speakParagraph(this.activeParagraphIdx);
   }
 
   pause() {
-    if (this.currentAudio) {
-      this.currentAudio.pause();
+    this.playSessionId++;
+    this.isPlaying = false;
+    this.isTransitioning = false;
+
+    if (this.audioEl) {
+      this.audioEl.pause();
     }
     if (this.synth) {
-      this.synth.pause();
+      this.synth.cancel();
+      this.activeUtterance = null;
     }
-    this.isPlaying = false;
+    this.stopSample();
+
     this._stopProgressLogger();
     this.onStateChange({ isPlaying: false });
   }
@@ -335,114 +389,139 @@ export class AudioEngine {
   }
 
   stop() {
-    if (this.currentAudio) {
-      this.currentAudio.pause();
-      this.currentAudio.onended = null;
-      this.currentAudio.onerror = null;
-      this.currentAudio = null;
+    this.playSessionId++;
+    this.isPlaying = false;
+    this.isTransitioning = false;
+
+    if (this.audioEl) {
+      this.audioEl.pause();
+      this.audioEl.currentTime = 0;
+    }
+    if (this.synth) {
+      this.synth.cancel();
+      this.activeUtterance = null;
     }
     this.stopSample();
-    this.isPlaying = false;
+
     this._stopProgressLogger();
     this.onStateChange({ isPlaying: false });
   }
 
-  // Speak a paragraph using high-definition Studio Neural Audio
+  // Speaks a paragraph with guaranteed single-source execution
   _speakParagraph(idx) {
-    this.stop();
+    if (idx < 0 || idx >= this.paragraphs.length) return;
 
-    if (idx >= this.paragraphs.length) {
-      // Chapter finished: auto-advance or pause
-      if (this.currentChapterIndex < (this.currentBook.chapters?.length || 1)) {
-        this.nextChapter();
+    this.activeParagraphIdx = idx;
+    const text = this.paragraphs[idx];
+
+    // Absolute mutual exclusion: cancel browser speech synthesizer
+    if (this.synth) {
+      this.synth.cancel();
+      this.activeUtterance = null;
+    }
+
+    const isStudioVoice = STUDIO_NEURAL_VOICES.some(v => v.id === this.selectedVoiceName);
+
+    if (this.useStudioNeural && isStudioVoice) {
+      this._speakWithStudioAudio(idx, text);
+    } else {
+      this._speakWithSpeechSynthesis(idx, text);
+    }
+  }
+
+  _speakWithStudioAudio(idx, text) {
+    if (!this.audioEl) {
+      this._speakWithSpeechSynthesis(idx, text);
+      return;
+    }
+
+    // Resolve voice based on language detection
+    const hasJapanese = /[一-龠ぁ-ゔァ-ヴー]/.test(text);
+    let voiceId = this.selectedVoiceName;
+    if (hasJapanese && voiceId.startsWith('en')) {
+      voiceId = 'ja-JP-NanamiNeural';
+    } else if (!hasJapanese && voiceId.startsWith('ja')) {
+      voiceId = 'en-US-AndrewNeural';
+    }
+
+    const audioUrl = `/api/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voiceId)}`;
+
+    // Set transition state and bump session ID
+    this.isTransitioning = true;
+    this.isPlaying = true;
+    const currentSession = ++this.playSessionId;
+
+    this.onSentenceChange(idx);
+
+    this.audioEl.playbackRate = this.playbackRate;
+
+    // Check if audio src is already pointing to this URL
+    const resolvedUrl = new URL(audioUrl, window.location.href).href;
+    if (this.audioEl.src !== resolvedUrl) {
+      this.audioEl.src = audioUrl;
+    } else {
+      this.audioEl.currentTime = 0;
+    }
+
+    this.audioEl.play().then(() => {
+      if (this.playSessionId !== currentSession) return;
+      this.isTransitioning = false;
+    }).catch(err => {
+      if (this.playSessionId !== currentSession) return;
+      this.isTransitioning = false;
+
+      // AbortError is normal when play() was superseded or paused by user. Do NOT trigger fallback!
+      if (err.name === 'AbortError') {
+        return;
+      }
+
+      console.warn('[Studio Audio] Play failed, falling back:', err);
+      if (this.isPlaying) {
+        this._speakWithSpeechSynthesis(idx, text);
+      }
+    });
+  }
+
+  _prefetchParagraph(nextIdx) {
+    if (nextIdx >= this.paragraphs.length) return;
+    const nextText = this.paragraphs[nextIdx];
+    const hasJapanese = /[一-龠ぁ-ゔァ-ヴー]/.test(nextText);
+    let voiceId = this.selectedVoiceName;
+    if (hasJapanese && voiceId.startsWith('en')) {
+      voiceId = 'ja-JP-NanamiNeural';
+    } else if (!hasJapanese && voiceId.startsWith('ja')) {
+      voiceId = 'en-US-AndrewNeural';
+    }
+
+    const nextUrl = `/api/tts?text=${encodeURIComponent(nextText)}&voice=${encodeURIComponent(voiceId)}`;
+    if (typeof fetch !== 'undefined') {
+      fetch(nextUrl, { priority: 'low' }).catch(() => {});
+    }
+  }
+
+  _advanceToNextParagraph(nextIdx) {
+    if (nextIdx >= this.paragraphs.length) {
+      // Chapter complete: advance to next chapter if available
+      const maxChapters = this.currentBook?.chapters?.length || 1;
+      if (this.currentChapterIndex < maxChapters) {
+        this.setChapter(this.currentChapterIndex + 1);
       } else {
         this.stop();
       }
       return;
     }
 
-    this.activeParagraphIdx = idx;
-    const text = this.paragraphs[idx];
-    const isStudioVoice = STUDIO_NEURAL_VOICES.some(v => v.id === this.selectedVoiceName);
-
-    // Resolve target voice for text
-    const hasJapanese = /[一-龠ぁ-ゔァ-ヴー]/.test(text);
-    let targetVoiceId = this.selectedVoiceName;
-
-    // Prevent cross-language mismatch
-    if (hasJapanese && targetVoiceId.startsWith('en')) {
-      targetVoiceId = 'ja-JP-NanamiNeural';
-    } else if (!hasJapanese && targetVoiceId.startsWith('ja')) {
-      targetVoiceId = 'en-US-AndrewNeural';
-    }
-
-    if (this.useStudioNeural && isStudioVoice) {
-      this._speakWithStudioAudio(idx, text, targetVoiceId);
-    } else {
-      this._speakWithSpeechSynthesis(idx, text);
-    }
-  }
-
-  _speakWithStudioAudio(idx, text, voiceId) {
-    let audio = null;
-
-    // Check if next paragraph was already preloaded
-    if (this.preloadedAudio && this.preloadedIdx === idx) {
-      audio = this.preloadedAudio;
-      this.preloadedAudio = null;
-      this.preloadedIdx = -1;
-    } else {
-      const audioUrl = `/api/tts?text=${encodeURIComponent(text)}&voice=${encodeURIComponent(voiceId)}`;
-      audio = new Audio(audioUrl);
-    }
-
-    this.currentAudio = audio;
-    audio.playbackRate = this.playbackRate;
-
-    audio.onplay = () => {
-      this.isPlaying = true;
-      this._startProgressLogger();
-      this.onSentenceChange(this.activeParagraphIdx);
-      this.onStateChange({
-        isPlaying: true,
-        paragraphIdx: this.activeParagraphIdx,
-        totalParagraphs: this.paragraphs.length
-      });
-
-      // Preload next paragraph's audio for gapless playback
-      this._preloadNextParagraph(this.activeParagraphIdx + 1, voiceId);
-    };
-
-    audio.onended = () => {
-      if (this.isPlaying) {
-        this._speakParagraph(this.activeParagraphIdx + 1);
-      }
-    };
-
-    audio.onerror = (err) => {
-      console.warn('[Studio Audio] Streaming failed, falling back to local voice:', err);
-      this._speakWithSpeechSynthesis(idx, text);
-    };
-
-    audio.play().catch(err => {
-      console.warn('[Studio Audio] Autoplay interrupted:', err);
-      // Fallback
-      this._speakWithSpeechSynthesis(idx, text);
-    });
-  }
-
-  _preloadNextParagraph(nextIdx, voiceId) {
-    if (nextIdx >= this.paragraphs.length) return;
-    const nextText = this.paragraphs[nextIdx];
-    const audioUrl = `/api/tts?text=${encodeURIComponent(nextText)}&voice=${encodeURIComponent(voiceId)}`;
-    const preload = new Audio(audioUrl);
-    preload.preload = 'auto';
-    this.preloadedAudio = preload;
-    this.preloadedIdx = nextIdx;
+    this._speakParagraph(nextIdx);
   }
 
   _speakWithSpeechSynthesis(idx, text) {
     if (!this.synth) return;
+
+    // Absolute mutual exclusion: pause HTMLAudioElement
+    if (this.audioEl) {
+      this.audioEl.pause();
+    }
+
     this.synth.cancel();
 
     this.activeParagraphIdx = idx;
@@ -463,7 +542,10 @@ export class AudioEngine {
       if (ev) this.activeUtterance.voice = ev;
     }
 
+    const currentSession = ++this.playSessionId;
+
     this.activeUtterance.onstart = () => {
+      if (this.playSessionId !== currentSession) return;
       this.isPlaying = true;
       this._startProgressLogger();
       this.onSentenceChange(this.activeParagraphIdx);
@@ -475,12 +557,15 @@ export class AudioEngine {
     };
 
     this.activeUtterance.onend = () => {
+      if (this.playSessionId !== currentSession) return;
       if (this.isPlaying) {
-        this._speakParagraph(this.activeParagraphIdx + 1);
+        this._advanceToNextParagraph(idx + 1);
       }
     };
 
     this.activeUtterance.onerror = (e) => {
+      if (this.playSessionId !== currentSession) return;
+      if (e.error === 'canceled' || e.error === 'interrupted') return;
       console.warn('[SpeechSynthesis] Error:', e);
       this.isPlaying = false;
       this._stopProgressLogger();
@@ -503,8 +588,8 @@ export class AudioEngine {
 
   setRate(rate) {
     this.playbackRate = Number(rate) || 1.0;
-    if (this.currentAudio) {
-      this.currentAudio.playbackRate = this.playbackRate;
+    if (this.audioEl) {
+      this.audioEl.playbackRate = this.playbackRate;
     }
     if (this.activeUtterance) {
       this.activeUtterance.rate = this.playbackRate;

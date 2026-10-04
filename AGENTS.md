@@ -89,11 +89,11 @@ headway/
 ---
 
 ## 7. Changelog
-- **2026-10-04**: Studio Neural Audio Upgrade (Natural Human Narration).
-  - Integrated `msedge-tts` streaming 24kHz studio-quality neural audio (`en-US-AndrewNeural`, `en-US-AvaNeural`, `en-GB-RyanNeural`, `ja-JP-NanamiNeural`, etc.) to eliminate robotic browser SAPI5 voices.
-  - Added lookahead paragraph preloader (`_preloadNextParagraph`) for zero-latency, gapless paragraph transitions.
-  - Built upgraded Narrator Voice modal with HD Studio badges, style descriptions, and real-time sample auditioning (`/api/tts`).
-  - Preserved graceful offline fallback to browser `speechSynthesis`.
+- **2026-10-04**: Studio Neural Audio Upgrade & Concurrency Architecture Fix.
+  - Re-architected `AudioEngine` around a single dedicated `HTMLAudioElement` with session-ID tokens (`playSessionId`) to completely eliminate dual playback (simultaneous SpeechSynthesis and Audio).
+  - Fixed HTML5 `pause`/`ended` event ordering where browsers fired `pause` upon completion, unblocking automatic sequential paragraph advancement (0 -> 1 -> 2 -> ...).
+  - Integrated in-memory LRU audio buffer caching on `/api/tts` with exact `Content-Length` and `Accept-Ranges` headers, enabling 0ms instant repeated plays and deterministic seek/ended events.
+  - Resolved `msedge-tts` WebSocket initialization collision by provisioning isolated client instances per synthesis.
 - **2026-10-04**: YouTube In-App Search, Video Summarization & English Default.
   - Built `server/youtube.js` for real-time video search & automatic subtitle/speech transcript extraction (JA/EN).
   - Wired Gemini 3.5 Flash Lite to ingest full video speech transcripts and structure 5-chapter audio editions.

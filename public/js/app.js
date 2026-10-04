@@ -4,7 +4,7 @@
  */
 
 import { icons } from './icons.js';
-import { AudioEngine } from './audioEngine.js?v=2';
+import { AudioEngine } from './audioEngine.js?v=3';
 
 class HeadwayApp {
   constructor() {
