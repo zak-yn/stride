@@ -38,22 +38,40 @@ class DatabaseService {
   async init() {
     if (this.initialized) return;
 
-    // 1. Try local file storage first
+    // 1. Try local file storage first (instant synchronous read in <2ms)
     this._loadLocal();
 
-    // 2. If Upstash is configured, attempt cloud sync
-    if (this.hasUpstash) {
-      console.log('⚡ [DB] Connecting to Upstash Redis Cloud...');
-      await this._syncFromUpstash();
-    } else {
-      console.log('📁 [DB] Running with local file storage (data/ directory)');
-    }
-
-    // 3. If catalog is empty, hydrate from seedBooks
+    // 2. If catalog is empty, hydrate from seedBooks
     if (this.books.length === 0) {
       console.log('📚 [DB] Seeding default curated microlearning books...');
       this.books = [...seedBooks];
-      await this._persistBooks();
+      this._persistBooks().catch(() => {});
+    }
+
+    // 3. Clean up any hallucinated phantom fallback items
+    const initialCount = this.books.length;
+    this.books = this.books.filter(b => !b.title?.startsWith('YouTube Video (') && !b.id?.startsWith('youtube-video-qy8gr27ylmk'));
+    if (this.books.length !== initialCount) {
+      this._persistBooks().catch(() => {});
+    }
+
+    // 4. If Upstash is configured, run cloud sync asynchronously in background
+    // This allows Express to bind the port and serve requests in milliseconds!
+    if (this.hasUpstash) {
+      console.log('⚡ [DB] Connecting to Upstash Redis Cloud in background...');
+      this._syncFromUpstash()
+        .then(() => {
+          const filtered = this.books.filter(b => !b.title?.startsWith('YouTube Video (') && !b.id?.startsWith('youtube-video-qy8gr27ylmk'));
+          if (filtered.length !== this.books.length) {
+            this.books = filtered;
+            this._persistBooks().catch(() => {});
+          }
+        })
+        .catch(err => {
+          console.warn('⚠️ [DB] Background Upstash sync error:', err.message);
+        });
+    } else {
+      console.log('📁 [DB] Running with local file storage (data/ directory)');
     }
 
     this.initialized = true;

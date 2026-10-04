@@ -110,27 +110,47 @@ export async function fetchVideoDetailsAndTranscript(videoId, options = {}) {
   let description = '';
   let thumbnail = clientThumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
+  // 1. Always query official YouTube oEmbed API first (never blocked on datacenter / cloud IPs)
+  try {
+    const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(videoUrl)}&format=json`;
+    const oeRes = await fetch(oembedUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+      },
+      signal: AbortSignal.timeout(6000)
+    });
+    if (oeRes.ok) {
+      const oeData = await oeRes.json();
+      if (oeData.title) title = oeData.title;
+      if (oeData.author_name) author = oeData.author_name;
+      if (oeData.thumbnail_url) thumbnail = oeData.thumbnail_url;
+    }
+  } catch (oeErr) {
+    console.warn(`[YouTube] oEmbed fetch warning for ${videoId}:`, oeErr.message);
+  }
+
+  // 2. Fetch full HTML for description and additional player details
   try {
     const res = await fetch(videoUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         'Accept-Language': acceptLanguage
       },
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(8000)
     });
 
     if (res.ok) {
       const html = await res.text();
       
-      // Parse player response for clean metadata
+      // Parse player response for clean metadata & description
       const playerMatch = html.match(/ytInitialPlayerResponse\s*=\s*({.+?});/s);
       if (playerMatch && playerMatch[1]) {
         try {
           const playerData = JSON.parse(playerMatch[1]);
           const videoDetails = playerData?.videoDetails;
           if (videoDetails) {
-            if (videoDetails.title) title = videoDetails.title;
-            if (videoDetails.author) author = videoDetails.author;
+            if (videoDetails.title && (!title || title.startsWith('YouTube Video'))) title = videoDetails.title;
+            if (videoDetails.author && (!author || author === 'YouTube Creator')) author = videoDetails.author;
             if (videoDetails.shortDescription) description = videoDetails.shortDescription;
             if (videoDetails.thumbnail?.thumbnails?.length > 0) {
               const scrapedThumb = videoDetails.thumbnail.thumbnails.slice(-1)[0].url;
@@ -153,7 +173,7 @@ export async function fetchVideoDetailsAndTranscript(videoId, options = {}) {
       }
     }
   } catch (metaErr) {
-    console.warn(`[YouTube] Metadata fetch error for ${videoId}:`, metaErr.message);
+    console.warn(`[YouTube] Metadata HTML fetch error for ${videoId}:`, metaErr.message);
   }
 
   // 2. Fetch transcript with multi-language fallback

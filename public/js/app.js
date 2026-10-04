@@ -53,12 +53,17 @@ class HeadwayApp {
     this.setupEventListeners();
     this.registerServiceWorker();
 
-    // Initial Data Fetch
-    await this.fetchProgress();
-    await this.fetchBooks();
-    await this.fetchFlashcards();
-    await this.fetchShorts();
-    await this.fetchSystemStatus();
+    // 1. Instant 0ms render from LocalStorage cache (Stale-While-Revalidate)
+    this.restoreFromLocalCache();
+
+    // 2. Parallel background revalidation (fetch all endpoints concurrently)
+    await Promise.allSettled([
+      this.fetchProgress(),
+      this.fetchBooks(),
+      this.fetchFlashcards(),
+      this.fetchShorts(),
+      this.fetchSystemStatus()
+    ]);
   }
 
   registerServiceWorker() {
@@ -367,7 +372,72 @@ class HeadwayApp {
     });
   }
 
-  // --- Data Fetching & Sync ---
+  // --- Data Fetching, Local Cache (SWR) & Sync ---
+
+  restoreFromLocalCache() {
+    try {
+      // 1. Books Cache
+      const cachedBooks = localStorage.getItem('stride_cached_books');
+      if (cachedBooks) {
+        const parsed = JSON.parse(cachedBooks);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Filter out any phantom books
+          this.books = parsed.filter(b => !b.title?.startsWith('YouTube Video ('));
+          this.renderBooksGrid('today-book-grid');
+          this.renderBooksGrid('library-book-grid');
+          
+          const countLabel = document.getElementById('library-count-label');
+          if (countLabel) countLabel.innerText = `${this.books.length} Titles`;
+
+          if (this.books.length > 0) {
+            const hero = this.books[0];
+            const heroTitle = document.getElementById('hero-title');
+            const heroAuthor = document.getElementById('hero-author');
+            const heroSynopsis = document.getElementById('hero-synopsis');
+            if (heroTitle) heroTitle.innerText = hero.title;
+            if (heroAuthor) heroAuthor.innerText = hero.author;
+            if (heroSynopsis) heroSynopsis.innerText = hero.synopsis || '';
+          }
+        }
+      }
+
+      // 2. User State / Streak Cache
+      const cachedProgress = localStorage.getItem('stride_cached_progress');
+      if (cachedProgress) {
+        const parsedState = JSON.parse(cachedProgress);
+        if (parsedState && typeof parsedState === 'object') {
+          this.userState = { ...this.userState, ...parsedState };
+          this.updateHabitUI();
+        }
+      }
+
+      // 3. Flashcards Cache
+      const cachedCards = localStorage.getItem('stride_cached_flashcards');
+      if (cachedCards) {
+        const parsedCards = JSON.parse(cachedCards);
+        if (Array.isArray(parsedCards) && parsedCards.length > 0) {
+          this.dueCards = parsedCards;
+          this.currentCardIdx = 0;
+          this.isCardFlipped = false;
+          this.renderCurrentFlashcard();
+          const dueCountEl = document.getElementById('stat-due-count');
+          if (dueCountEl) dueCountEl.innerText = this.dueCards.length;
+        }
+      }
+
+      // 4. Shorts Cache
+      const cachedShorts = localStorage.getItem('stride_cached_shorts');
+      if (cachedShorts) {
+        const parsedShorts = JSON.parse(cachedShorts);
+        if (Array.isArray(parsedShorts) && parsedShorts.length > 0) {
+          this.shorts = parsedShorts;
+          this.renderShorts();
+        }
+      }
+    } catch (e) {
+      console.warn('[App] Local cache restore warning:', e);
+    }
+  }
 
   async fetchProgress() {
     try {
@@ -376,6 +446,9 @@ class HeadwayApp {
       if (data.success && data.progress) {
         this.userState = data.progress;
         this.updateHabitUI();
+        try {
+          localStorage.setItem('stride_cached_progress', JSON.stringify(this.userState));
+        } catch (_) {}
       }
     } catch (err) {
       console.warn('[App] Error fetching progress:', err);
@@ -387,7 +460,7 @@ class HeadwayApp {
       const res = await fetch('/api/books');
       const data = await res.json();
       if (data.success && Array.isArray(data.books)) {
-        this.books = data.books;
+        this.books = data.books.filter(b => !b.title?.startsWith('YouTube Video ('));
         this.renderBooksGrid('today-book-grid');
         this.renderBooksGrid('library-book-grid');
         
@@ -397,10 +470,17 @@ class HeadwayApp {
         // Update hero card if available
         if (this.books.length > 0) {
           const hero = this.books[0];
-          document.getElementById('hero-title').innerText = hero.title;
-          document.getElementById('hero-author').innerText = hero.author;
-          document.getElementById('hero-synopsis').innerText = hero.synopsis || '';
+          const heroTitle = document.getElementById('hero-title');
+          const heroAuthor = document.getElementById('hero-author');
+          const heroSynopsis = document.getElementById('hero-synopsis');
+          if (heroTitle) heroTitle.innerText = hero.title;
+          if (heroAuthor) heroAuthor.innerText = hero.author;
+          if (heroSynopsis) heroSynopsis.innerText = hero.synopsis || '';
         }
+
+        try {
+          localStorage.setItem('stride_cached_books', JSON.stringify(this.books));
+        } catch (_) {}
       }
     } catch (err) {
       console.warn('[App] Error fetching books:', err);
@@ -421,6 +501,10 @@ class HeadwayApp {
         document.getElementById('stat-due-count').innerText = data.dueCount || this.dueCards.length;
         document.getElementById('stat-mastered-count').innerText = this.userState.flashcardStats?.masteredCards || 0;
         document.getElementById('stat-reviewed-count').innerText = this.userState.flashcardStats?.totalReviewed || 0;
+
+        try {
+          localStorage.setItem('stride_cached_flashcards', JSON.stringify(this.dueCards));
+        } catch (_) {}
       }
     } catch (err) {
       console.warn('[App] Error fetching flashcards:', err);
@@ -434,6 +518,10 @@ class HeadwayApp {
       if (data.success && Array.isArray(data.shorts)) {
         this.shorts = data.shorts;
         this.renderShorts();
+
+        try {
+          localStorage.setItem('stride_cached_shorts', JSON.stringify(this.shorts));
+        } catch (_) {}
       }
     } catch (err) {
       console.warn('[App] Error fetching shorts:', err);
@@ -1148,12 +1236,22 @@ class HeadwayApp {
     });
   }
 
-  async handleYouTubeSummarize(videoId, videoTitle, videoChannel = '', videoThumbnail = '') {
+  extractYouTubeId(urlOrId) {
+    if (!urlOrId || typeof urlOrId !== 'string') return null;
+    const trimmed = urlOrId.trim();
+    if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
+      return trimmed;
+    }
+    const regExp = /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|shorts\/|live\/|feature=player_embedded&v=))([^#&?]*)/;
+    const match = trimmed.match(regExp);
+    return (match && match[1].length === 11) ? match[1] : null;
+  }
+
+  async handleYouTubeSummarize(videoId, videoTitle, videoChannel = '', videoThumbnail = '', languageOverride = null) {
     const statusBox = document.getElementById('studio-status-box');
     const statusHeadline = document.getElementById('studio-status-headline');
     const statusText = document.getElementById('studio-status-text');
-    const langSelect = document.getElementById('yt-output-language');
-    const selectedLang = langSelect ? langSelect.value : 'English';
+    const selectedLang = languageOverride || document.getElementById('yt-output-language')?.value || document.getElementById('studio-language')?.value || 'English';
 
     if (statusBox) {
       statusBox.style.display = 'block';
@@ -1220,6 +1318,49 @@ class HeadwayApp {
     if (!inputVal) {
       alert('Please enter a YouTube URL, book title, or topic first.');
       inputEl?.focus();
+      return;
+    }
+
+    const selectedLanguage = langEl ? langEl.value : 'English';
+    const ytId = this.extractYouTubeId(inputVal);
+
+    // If user entered a YouTube URL directly, resolve official metadata & delegate
+    if (ytId) {
+      btn.disabled = true;
+      btn.style.opacity = '0.6';
+      if (statusBox) {
+        statusBox.style.display = 'block';
+        if (statusHeadline) statusHeadline.innerText = 'Resolving YouTube Video...';
+        if (statusText) statusText.innerText = 'Fetching video title & channel information...';
+      }
+
+      let clientTitle = '';
+      let clientChannel = '';
+      let clientThumbnail = `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
+
+      try {
+        const oeRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${ytId}&format=json`);
+        if (oeRes.ok) {
+          const oeData = await oeRes.json();
+          if (oeData.title) clientTitle = oeData.title;
+          if (oeData.author_name) clientChannel = oeData.author_name;
+          if (oeData.thumbnail_url) clientThumbnail = oeData.thumbnail_url;
+        }
+      } catch (e) {
+        console.warn('[App] Client oEmbed lookup warning:', e);
+      }
+
+      await this.handleYouTubeSummarize(
+        ytId,
+        clientTitle || `YouTube Video (${ytId})`,
+        clientChannel || 'YouTube Creator',
+        clientThumbnail,
+        selectedLanguage
+      );
+
+      if (inputEl) inputEl.value = '';
+      btn.disabled = false;
+      btn.style.opacity = '1';
       return;
     }
 

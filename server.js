@@ -202,7 +202,9 @@ app.post('/api/generate', async (req, res) => {
 
     if (ytId) {
       console.log(`🎬 [Gemini] Detected YouTube input (${ytId}). Extracting transcript & metadata...`);
-      const videoDetails = await fetchVideoDetailsAndTranscript(ytId);
+      const videoDetails = await fetchVideoDetailsAndTranscript(ytId, {
+        preferredLanguage: language || 'English'
+      });
       summaryData = await geminiSummarizer.summarizeYouTubeVideo(videoDetails, language || 'English');
     } else {
       console.log(`🤖 [Gemini] Generating microlearning summary for: "${input.slice(0, 60)}..."`);
