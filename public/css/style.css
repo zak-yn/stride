@@ -961,9 +961,11 @@ body {
   -webkit-appearance: none;
   appearance: none;
   height: 4px;
-  background: var(--bg-surface-elevated);
+  background: linear-gradient(to right, var(--brand-yellow) 0%, var(--brand-yellow) var(--seek-pct, 0%), var(--bg-surface-elevated) var(--seek-pct, 0%), var(--bg-surface-elevated) 100%);
   border-radius: 2px;
   outline: none;
+  cursor: pointer;
+  transition: background 0.05s linear;
 }
 
 .scrub-slider::-webkit-slider-thumb {
@@ -973,7 +975,13 @@ body {
   height: 14px;
   border-radius: 50%;
   background: var(--brand-yellow);
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
   cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.scrub-slider:active::-webkit-slider-thumb {
+  transform: scale(1.2);
 }
 
 .playback-controls {

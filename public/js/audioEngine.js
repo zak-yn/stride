@@ -93,11 +93,12 @@ export const STUDIO_NEURAL_VOICES = [
 ];
 
 export class AudioEngine {
-  constructor({ onStateChange, onSentenceChange, onProgressUpdate, onVoicesReady }) {
+  constructor({ onStateChange, onSentenceChange, onProgressUpdate, onVoicesReady, onTimeUpdate }) {
     this.onStateChange = onStateChange || (() => {});
     this.onSentenceChange = onSentenceChange || (() => {});
     this.onProgressUpdate = onProgressUpdate || (() => {});
     this.onVoicesReady = onVoicesReady || (() => {});
+    this.onTimeUpdate = onTimeUpdate || (() => {});
 
     this.currentBook = null;
     this.currentChapterIndex = 1;
@@ -107,6 +108,14 @@ export class AudioEngine {
     this.activeParagraphIdx = 0;
     this.accumulatedSeconds = 0;
     this.progressSyncInterval = null;
+
+    // Timeline & duration estimation
+    this.paragraphDurations = [];
+    this.paragraphOffsets = [];
+    this.chapterTotalDuration = 0;
+    this.timeUpdateTimer = null;
+    this.speechSynthesisStartTime = 0;
+    this.speechSynthesisElapsed = 0;
 
     // Concurrency & state protection
     this.playSessionId = 0;
@@ -150,6 +159,21 @@ export class AudioEngine {
 
       // Low-priority HTTP prefetch of next paragraph to ensure 0ms gapless transition
       this._prefetchParagraph(this.activeParagraphIdx + 1);
+      this._emitTimeUpdate();
+    });
+
+    this.audioEl.addEventListener('timeupdate', () => {
+      this._emitTimeUpdate();
+    });
+
+    this.audioEl.addEventListener('loadedmetadata', () => {
+      if (this.audioEl && isFinite(this.audioEl.duration) && this.audioEl.duration > 0) {
+        if (this.paragraphDurations[this.activeParagraphIdx]) {
+          this.paragraphDurations[this.activeParagraphIdx] = this.audioEl.duration;
+          this._recalculateOffsets();
+          this._emitTimeUpdate();
+        }
+      }
     });
 
     this.audioEl.addEventListener('ended', () => {
@@ -167,6 +191,7 @@ export class AudioEngine {
         this.isPlaying = false;
         this._stopProgressLogger();
         this.onStateChange({ isPlaying: false });
+        this._emitTimeUpdate();
       }
     });
 
@@ -308,6 +333,35 @@ export class AudioEngine {
     }
   }
 
+  _estimateParagraphDuration(text) {
+    if (!text || typeof text !== 'string') return 2.0;
+    const isJa = /[一-龠ぁ-ゔァ-ヴー]/.test(text);
+    const rate = this.playbackRate || 1.0;
+    if (isJa) {
+      // 日本語: 約5.2文字/秒 + 文末ポーズ0.4秒
+      return Math.max(1.5, ((text.trim().length / 5.2) + 0.4) / rate);
+    } else {
+      // 英語: 約2.4 words/秒 + 文末ポーズ0.4秒
+      const words = text.trim().split(/\s+/).filter(Boolean).length;
+      return Math.max(1.5, ((words / 2.4) + 0.4) / rate);
+    }
+  }
+
+  _calculateParagraphDurations() {
+    this.paragraphDurations = this.paragraphs.map(p => this._estimateParagraphDuration(p));
+    this._recalculateOffsets();
+  }
+
+  _recalculateOffsets() {
+    this.paragraphOffsets = [];
+    let acc = 0;
+    for (let i = 0; i < this.paragraphDurations.length; i++) {
+      this.paragraphOffsets[i] = acc;
+      acc += (this.paragraphDurations[i] || 2.0);
+    }
+    this.chapterTotalDuration = Math.max(acc, 1.0);
+  }
+
   loadBook(book, chapterIndex = 1) {
     this.stop();
     this.currentBook = book;
@@ -325,6 +379,7 @@ export class AudioEngine {
       this.paragraphs = [];
     }
 
+    this._calculateParagraphDurations();
     this._updateMediaSessionMetadata();
     this.onStateChange({
       book: this.currentBook,
@@ -333,6 +388,12 @@ export class AudioEngine {
       rate: this.playbackRate,
       paragraphIdx: 0,
       totalParagraphs: this.paragraphs.length
+    });
+
+    this.onTimeUpdate({
+      currentTime: 0,
+      duration: this.chapterTotalDuration,
+      progressPercent: 0
     });
   }
 
@@ -374,6 +435,7 @@ export class AudioEngine {
 
     this._stopProgressLogger();
     this.onStateChange({ isPlaying: false });
+    this._emitTimeUpdate();
   }
 
   resume() {
@@ -405,10 +467,11 @@ export class AudioEngine {
 
     this._stopProgressLogger();
     this.onStateChange({ isPlaying: false });
+    this._emitTimeUpdate(0);
   }
 
   // Speaks a paragraph with guaranteed single-source execution
-  _speakParagraph(idx) {
+  _speakParagraph(idx, startOffsetSec = 0) {
     if (idx < 0 || idx >= this.paragraphs.length) return;
 
     this.activeParagraphIdx = idx;
@@ -423,13 +486,13 @@ export class AudioEngine {
     const isStudioVoice = STUDIO_NEURAL_VOICES.some(v => v.id === this.selectedVoiceName);
 
     if (this.useStudioNeural && isStudioVoice) {
-      this._speakWithStudioAudio(idx, text);
+      this._speakWithStudioAudio(idx, text, startOffsetSec);
     } else {
       this._speakWithSpeechSynthesis(idx, text);
     }
   }
 
-  _speakWithStudioAudio(idx, text) {
+  _speakWithStudioAudio(idx, text, startOffsetSec = 0) {
     if (!this.audioEl) {
       this._speakWithSpeechSynthesis(idx, text);
       return;
@@ -460,12 +523,18 @@ export class AudioEngine {
     if (this.audioEl.src !== resolvedUrl) {
       this.audioEl.src = audioUrl;
     } else {
-      this.audioEl.currentTime = 0;
+      this.audioEl.currentTime = startOffsetSec || 0;
     }
 
     this.audioEl.play().then(() => {
       if (this.playSessionId !== currentSession) return;
+      if (startOffsetSec > 0 && isFinite(this.audioEl.duration)) {
+        try {
+          this.audioEl.currentTime = Math.min(startOffsetSec, Math.max(0, this.audioEl.duration - 0.1));
+        } catch (e) {}
+      }
       this.isTransitioning = false;
+      this._emitTimeUpdate();
     }).catch(err => {
       if (this.playSessionId !== currentSession) return;
       this.isTransitioning = false;
@@ -546,6 +615,7 @@ export class AudioEngine {
 
     this.activeUtterance.onstart = () => {
       if (this.playSessionId !== currentSession) return;
+      this.speechSynthesisStartTime = Date.now();
       this.isPlaying = true;
       this._startProgressLogger();
       this.onSentenceChange(this.activeParagraphIdx);
@@ -554,6 +624,7 @@ export class AudioEngine {
         paragraphIdx: this.activeParagraphIdx,
         totalParagraphs: this.paragraphs.length
       });
+      this._emitTimeUpdate();
     };
 
     this.activeUtterance.onend = () => {
@@ -570,6 +641,7 @@ export class AudioEngine {
       this.isPlaying = false;
       this._stopProgressLogger();
       this.onStateChange({ isPlaying: false });
+      this._emitTimeUpdate();
     };
 
     this.synth.speak(this.activeUtterance);
@@ -582,7 +654,54 @@ export class AudioEngine {
         this._speakParagraph(idx);
       } else {
         this.onSentenceChange(idx);
+        this._emitTimeUpdate();
       }
+    }
+  }
+
+  seekToProgress(percent) {
+    if (!this.paragraphs.length) return;
+    const p = Math.max(0, Math.min(100, Number(percent) || 0));
+    const targetSec = (p / 100) * this.chapterTotalDuration;
+    this.seekToTime(targetSec);
+  }
+
+  seekToTime(targetSec) {
+    if (!this.paragraphs.length) return;
+    const clampedSec = Math.max(0, Math.min(this.chapterTotalDuration, Number(targetSec) || 0));
+
+    let targetIdx = 0;
+    for (let i = 0; i < this.paragraphs.length; i++) {
+      const start = this.paragraphOffsets[i] || 0;
+      const dur = this.paragraphDurations[i] || 2;
+      if (clampedSec >= start && clampedSec < start + dur) {
+        targetIdx = i;
+        break;
+      }
+      if (i === this.paragraphs.length - 1) {
+        targetIdx = i;
+      }
+    }
+
+    const paraStart = this.paragraphOffsets[targetIdx] || 0;
+    const offsetInPara = Math.max(0, clampedSec - paraStart);
+    const isSamePara = (targetIdx === this.activeParagraphIdx);
+    this.activeParagraphIdx = targetIdx;
+
+    if (!isSamePara) {
+      if (this.isPlaying) {
+        this._speakParagraph(targetIdx, offsetInPara);
+      } else {
+        this.onSentenceChange(targetIdx);
+        this._emitTimeUpdate(clampedSec);
+      }
+    } else {
+      if (this.audioEl && this.audioEl.src && isFinite(this.audioEl.duration)) {
+        try {
+          this.audioEl.currentTime = Math.min(offsetInPara, Math.max(0, this.audioEl.duration - 0.1));
+        } catch (e) {}
+      }
+      this._emitTimeUpdate(clampedSec);
     }
   }
 
@@ -594,13 +713,23 @@ export class AudioEngine {
     if (this.activeUtterance) {
       this.activeUtterance.rate = this.playbackRate;
     }
+    this._calculateParagraphDurations();
     this.onStateChange({ rate: this.playbackRate });
+    this._emitTimeUpdate();
   }
 
   skip(deltaSec) {
-    const deltaParas = deltaSec > 0 ? 1 : -1;
-    const target = Math.max(0, Math.min(this.paragraphs.length - 1, this.activeParagraphIdx + deltaParas));
-    this.jumpToParagraph(target);
+    if (!this.paragraphs.length) return;
+    const pastSec = this.paragraphOffsets[this.activeParagraphIdx] || 0;
+    let currentParaSec = 0;
+    if (this.audioEl && !this.audioEl.paused && isFinite(this.audioEl.currentTime)) {
+      currentParaSec = this.audioEl.currentTime;
+    } else if (this.activeUtterance && this.speechSynthesisStartTime) {
+      currentParaSec = Math.max(0, (Date.now() - this.speechSynthesisStartTime) / 1000) * this.playbackRate;
+    }
+    const currentSec = pastSec + currentParaSec;
+    const targetSec = Math.max(0, Math.min(this.chapterTotalDuration, currentSec + deltaSec));
+    this.seekToTime(targetSec);
   }
 
   setChapter(chapterIndex) {
@@ -629,8 +758,47 @@ export class AudioEngine {
     }
   }
 
+  _emitTimeUpdate(forcedElapsedSec = null) {
+    if (!this.paragraphs.length) {
+      this.onTimeUpdate({ currentTime: 0, duration: 0, progressPercent: 0 });
+      return;
+    }
+
+    let elapsedSec = 0;
+    if (forcedElapsedSec !== null) {
+      elapsedSec = forcedElapsedSec;
+    } else {
+      const pastSec = this.paragraphOffsets[this.activeParagraphIdx] || 0;
+      let currentParaSec = 0;
+
+      if (this.audioEl && !this.audioEl.paused && isFinite(this.audioEl.currentTime)) {
+        currentParaSec = this.audioEl.currentTime;
+      } else if (this.activeUtterance && this.speechSynthesisStartTime) {
+        currentParaSec = Math.max(0, (Date.now() - this.speechSynthesisStartTime) / 1000) * this.playbackRate;
+      }
+      elapsedSec = Math.min(this.chapterTotalDuration, pastSec + currentParaSec);
+    }
+
+    const totalSec = Math.max(1, this.chapterTotalDuration);
+    const progressPercent = Math.min(100, Math.max(0, (elapsedSec / totalSec) * 100));
+
+    this.onTimeUpdate({
+      currentTime: elapsedSec,
+      duration: totalSec,
+      progressPercent
+    });
+  }
+
   _startProgressLogger() {
     this._stopProgressLogger();
+
+    // 250ms timer for silky-smooth scrub slider and time updates
+    this.timeUpdateTimer = setInterval(() => {
+      if (this.isPlaying) {
+        this._emitTimeUpdate();
+      }
+    }, 250);
+
     this.progressSyncInterval = setInterval(() => {
       if (this.isPlaying) {
         this.accumulatedSeconds += 1;
@@ -644,6 +812,10 @@ export class AudioEngine {
   }
 
   _stopProgressLogger() {
+    if (this.timeUpdateTimer) {
+      clearInterval(this.timeUpdateTimer);
+      this.timeUpdateTimer = null;
+    }
     if (this.progressSyncInterval) {
       clearInterval(this.progressSyncInterval);
       this.progressSyncInterval = null;

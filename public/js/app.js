@@ -28,12 +28,14 @@ class HeadwayApp {
     // Selected book for details
     this.selectedBook = null;
     this.currentRenderedChapterKey = null;
+    this.isScrubbing = false;
 
     // Init Audio Engine
     this.audio = new AudioEngine({
       onStateChange: (state) => this.handleAudioStateChange(state),
       onSentenceChange: (idx) => this.handleSentenceChange(idx),
       onProgressUpdate: (data) => this.handleProgressUpdate(data),
+      onTimeUpdate: (timeData) => this.handleTimeUpdate(timeData),
       onVoicesReady: () => {
         const modal = document.getElementById('voice-modal');
         if (modal && modal.classList.contains('is-active')) {
@@ -209,6 +211,29 @@ class HeadwayApp {
     document.getElementById('btn-reader-next-ch')?.addEventListener('click', () => {
       this.audio.nextChapter();
     });
+
+    // Reader Timeline Scrubber
+    const scrubber = document.getElementById('reader-scrubber');
+    if (scrubber) {
+      scrubber.addEventListener('input', (e) => {
+        this.isScrubbing = true;
+        const val = parseFloat(e.target.value) || 0;
+        scrubber.style.setProperty('--seek-pct', `${val}%`);
+        if (this.audio && this.audio.chapterTotalDuration) {
+          const previewSec = (val / 100) * this.audio.chapterTotalDuration;
+          const currentEl = document.getElementById('reader-current-time');
+          if (currentEl) currentEl.innerText = this.formatTime(previewSec);
+        }
+      });
+
+      scrubber.addEventListener('change', (e) => {
+        const val = parseFloat(e.target.value) || 0;
+        this.audio.seekToProgress(val);
+        setTimeout(() => {
+          this.isScrubbing = false;
+        }, 150);
+      });
+    }
 
     // Playback Speed Toggle
     const speedBtn = document.getElementById('btn-reader-speed');
@@ -781,14 +806,38 @@ class HeadwayApp {
         this.renderChapterParagraphs(this.audio.paragraphs, state.paragraphIdx || 0);
       }
     }
+  }
 
-    if (state.totalParagraphs && state.totalParagraphs > 0) {
-      const progressPercent = Math.min(100, Math.round(((state.paragraphIdx + 1) / state.totalParagraphs) * 100));
-      const miniFill = document.getElementById('mini-progress-fill');
-      if (miniFill) miniFill.style.width = `${progressPercent}%`;
+  formatTime(seconds) {
+    const s = Math.max(0, Math.floor(seconds || 0));
+    const mins = Math.floor(s / 60);
+    const secs = s % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  }
 
-      const scrubber = document.getElementById('reader-scrubber');
-      if (scrubber) scrubber.value = progressPercent;
+  handleTimeUpdate({ currentTime, duration, progressPercent }) {
+    const currentEl = document.getElementById('reader-current-time');
+    const totalEl = document.getElementById('reader-total-time');
+    const scrubber = document.getElementById('reader-scrubber');
+    const miniFill = document.getElementById('mini-progress-fill');
+
+    if (currentEl && !this.isScrubbing) {
+      currentEl.innerText = this.formatTime(currentTime);
+    }
+
+    if (totalEl) {
+      totalEl.innerText = this.formatTime(duration);
+    }
+
+    const pct = Math.min(100, Math.max(0, Math.round(progressPercent * 10) / 10));
+
+    if (scrubber && !this.isScrubbing) {
+      scrubber.value = pct;
+      scrubber.style.setProperty('--seek-pct', `${pct}%`);
+    }
+
+    if (miniFill) {
+      miniFill.style.width = `${pct}%`;
     }
   }
 

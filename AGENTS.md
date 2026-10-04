@@ -89,6 +89,11 @@ headway/
 ---
 
 ## 7. Changelog
+- **2026-10-04**: Real-Time Audio Scrubber & Timeline Synchronization Engine.
+  - Resolved static "00:00" display and chunky progress jumps by implementing continuous timeline synchronization (`onTimeUpdate`) firing every 250ms via `timeupdate` and RAF interpolation.
+  - Added dynamic paragraph duration estimation (`_calculateParagraphDurations`) based on text word/character density and playback rate, dynamically computing accurate chapter totals (e.g. `01:51`).
+  - Implemented interactive timeline scrubbing with live preview dragging and seamless paragraph seek jump (`seekToProgress`, `seekToTime`).
+  - Added smooth CSS gradient fill (`--seek-pct`) to `.scrub-slider` for refined visual audio feedback.
 - **2026-10-04**: Studio Neural Audio Upgrade & Concurrency Architecture Fix.
   - Re-architected `AudioEngine` around a single dedicated `HTMLAudioElement` with session-ID tokens (`playSessionId`) to completely eliminate dual playback (simultaneous SpeechSynthesis and Audio).
   - Fixed HTML5 `pause`/`ended` event ordering where browsers fired `pause` upon completion, unblocking automatic sequential paragraph advancement (0 -> 1 -> 2 -> ...).
