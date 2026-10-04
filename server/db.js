@@ -18,9 +18,11 @@ if (!fs.existsSync(DATA_DIR)) {
 
 const BOOKS_FILE = path.join(DATA_DIR, 'books.json');
 const USER_STATE_FILE = path.join(DATA_DIR, 'user_state.json');
+const DELETED_BOOKS_FILE = path.join(DATA_DIR, 'deleted_books.json');
 
 const REDIS_KEY_BOOKS = 'stride_catalog_books';
 const REDIS_KEY_USER_STATE = 'stride_user_state';
+const REDIS_KEY_DELETED_BOOKS = 'stride_deleted_book_ids';
 const LEGACY_REDIS_KEY_BOOKS = 'headway_catalog_books';
 const LEGACY_REDIS_KEY_USER_STATE = 'headway_user_state';
 
@@ -31,6 +33,7 @@ class DatabaseService {
     this.hasUpstash = Boolean(this.upstashUrl && this.upstashToken);
 
     this.books = [];
+    this.deletedBookIds = new Set();
     this.userState = this._getDefaultUserState();
     this.initialized = false;
   }
@@ -41,34 +44,34 @@ class DatabaseService {
     // 1. Try local file storage first (instant synchronous read in <2ms)
     this._loadLocal();
 
-    // 2. If catalog is empty, hydrate from seedBooks
+    // 2. If catalog is empty, hydrate from seedBooks (LOCAL ONLY, do not overwrite Upstash yet!)
     if (this.books.length === 0) {
-      console.log('📚 [DB] Seeding default curated microlearning books...');
-      this.books = [...seedBooks];
-      this._persistBooks().catch(() => {});
+      console.log('📚 [DB] Seeding curated microlearning books locally...');
+      this.books = seedBooks.filter(b => !this.deletedBookIds.has(b.id));
+      this._persistLocalOnly();
     }
 
-    // 3. Clean up any hallucinated phantom fallback items
+    // 3. Clean up any hallucinated phantom fallback items or deleted books
     const initialCount = this.books.length;
-    this.books = this.books.filter(b => !b.title?.startsWith('YouTube Video (') && !b.id?.startsWith('youtube-video-qy8gr27ylmk'));
+    this.books = this.books.filter(
+      b => !b.title?.startsWith('YouTube Video (') &&
+           !b.id?.startsWith('youtube-video-qy8gr27ylmk') &&
+           !this.deletedBookIds.has(b.id)
+    );
     if (this.books.length !== initialCount) {
-      this._persistBooks().catch(() => {});
+      this._persistLocalOnly();
     }
 
-    // 4. If Upstash is configured, run cloud sync asynchronously in background
-    // This allows Express to bind the port and serve requests in milliseconds!
+    // 4. If Upstash is configured, run cloud sync in background
+    // Merges cloud with local without ever erasing generated books!
     if (this.hasUpstash) {
       console.log('⚡ [DB] Connecting to Upstash Redis Cloud in background...');
       this._syncFromUpstash()
         .then(() => {
-          const filtered = this.books.filter(b => !b.title?.startsWith('YouTube Video (') && !b.id?.startsWith('youtube-video-qy8gr27ylmk'));
-          if (filtered.length !== this.books.length) {
-            this.books = filtered;
-            this._persistBooks().catch(() => {});
-          }
+          console.log(`✅ [DB] Upstash cloud synchronization active. Total library books: ${this.books.length}`);
         })
         .catch(err => {
-          console.warn('⚠️ [DB] Background Upstash sync error:', err.message);
+          console.warn('⚠️ [DB] Background Upstash sync warning:', err.message);
         });
     } else {
       console.log('📁 [DB] Running with local file storage (data/ directory)');
@@ -100,11 +103,18 @@ class DatabaseService {
 
   _loadLocal() {
     try {
+      if (fs.existsSync(DELETED_BOOKS_FILE)) {
+        const rawDel = fs.readFileSync(DELETED_BOOKS_FILE, 'utf-8');
+        const parsedDel = JSON.parse(rawDel);
+        if (Array.isArray(parsedDel)) {
+          this.deletedBookIds = new Set(parsedDel);
+        }
+      }
       if (fs.existsSync(BOOKS_FILE)) {
         const raw = fs.readFileSync(BOOKS_FILE, 'utf-8');
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          this.books = parsed;
+          this.books = parsed.filter(b => !this.deletedBookIds.has(b.id));
         }
       }
       if (fs.existsSync(USER_STATE_FILE)) {
@@ -121,14 +131,56 @@ class DatabaseService {
 
   async _syncFromUpstash() {
     try {
-      const cloudBooks = await this._getUpstashKey(REDIS_KEY_BOOKS);
-      if (Array.isArray(cloudBooks) && cloudBooks.length > 0) {
-        this.books = cloudBooks;
-        fs.writeFileSync(BOOKS_FILE, JSON.stringify(this.books, null, 2), 'utf-8');
-      } else if (this.books.length > 0) {
-        await this._setUpstashKey(REDIS_KEY_BOOKS, this.books);
+      // 1. Fetch cloud deleted IDs to ensure deleted items remain deleted
+      const cloudDeleted = await this._getUpstashKey(REDIS_KEY_DELETED_BOOKS);
+      if (Array.isArray(cloudDeleted)) {
+        for (const id of cloudDeleted) {
+          this.deletedBookIds.add(id);
+        }
+        this._persistDeletedLocal();
       }
 
+      // 2. Fetch cloud catalog books
+      const cloudBooks = await this._getUpstashKey(REDIS_KEY_BOOKS);
+
+      // Merge: seedBooks + cloudBooks + local books without resurrecting deleted ones
+      const bookMap = new Map();
+
+      // Priority 1: seedBooks (base catalog)
+      for (const b of seedBooks) {
+        if (!this.deletedBookIds.has(b.id)) {
+          bookMap.set(b.id, { ...b, isGenerated: false });
+        }
+      }
+
+      // Priority 2: cloudBooks
+      if (Array.isArray(cloudBooks)) {
+        for (const b of cloudBooks) {
+          if (!this.deletedBookIds.has(b.id)) {
+            bookMap.set(b.id, b);
+          }
+        }
+      }
+
+      // Priority 3: local books (keep latest local generated editions)
+      for (const b of this.books) {
+        if (!this.deletedBookIds.has(b.id)) {
+          bookMap.set(b.id, b);
+        }
+      }
+
+      this.books = Array.from(bookMap.values()).filter(
+        b => !b.title?.startsWith('YouTube Video (') &&
+             !b.id?.startsWith('youtube-video-qy8gr27ylmk') &&
+             !this.deletedBookIds.has(b.id)
+      );
+
+      // Persist merged state to both local and Upstash Redis Cloud
+      this._persistLocalOnly();
+      await this._setUpstashKey(REDIS_KEY_BOOKS, this.books);
+      await this._setUpstashKey(REDIS_KEY_DELETED_BOOKS, Array.from(this.deletedBookIds));
+
+      // User state sync
       const cloudUserState = await this._getUpstashKey(REDIS_KEY_USER_STATE);
       if (cloudUserState && typeof cloudUserState === 'object') {
         this.userState = { ...this.userState, ...cloudUserState };
@@ -136,18 +188,29 @@ class DatabaseService {
       } else {
         await this._setUpstashKey(REDIS_KEY_USER_STATE, this.userState);
       }
-      console.log('✅ [DB] Upstash cloud synchronization active.');
     } catch (err) {
       console.warn('⚠️ [DB] Upstash sync failed, keeping local copy:', err.message);
     }
   }
 
-  async _persistBooks() {
+  _persistLocalOnly() {
     try {
       fs.writeFileSync(BOOKS_FILE, JSON.stringify(this.books, null, 2), 'utf-8');
     } catch (err) {
       console.error('❌ [DB] Failed to save books locally:', err.message);
     }
+  }
+
+  _persistDeletedLocal() {
+    try {
+      fs.writeFileSync(DELETED_BOOKS_FILE, JSON.stringify(Array.from(this.deletedBookIds), null, 2), 'utf-8');
+    } catch (err) {
+      console.error('❌ [DB] Failed to save deleted book IDs locally:', err.message);
+    }
+  }
+
+  async _persistBooks() {
+    this._persistLocalOnly();
     if (this.hasUpstash) {
       await this._setUpstashKey(REDIS_KEY_BOOKS, this.books);
     }
@@ -224,7 +287,10 @@ class DatabaseService {
       coverAccent: b.coverAccent || '#F5C518',
       synopsis: b.synopsis,
       chapterCount: b.chapters?.length || 0,
-      flashcardCount: b.flashcards?.length || 0
+      flashcardCount: b.flashcards?.length || 0,
+      isGenerated: Boolean(b.isGenerated),
+      createdAt: b.createdAt || null,
+      sourceType: b.sourceType || 'book'
     }));
   }
 
@@ -233,14 +299,60 @@ class DatabaseService {
   }
 
   async saveBook(book) {
-    const existingIdx = this.books.findIndex(b => b.id === book.id);
+    // If book was previously marked deleted, un-delete it since user is re-saving/generating
+    this.deletedBookIds.delete(book.id);
+    this._persistDeletedLocal();
+
+    const bookToSave = {
+      ...book,
+      isGenerated: book.isGenerated !== undefined ? book.isGenerated : true,
+      createdAt: book.createdAt || new Date().toISOString()
+    };
+
+    const existingIdx = this.books.findIndex(b => b.id === bookToSave.id);
     if (existingIdx >= 0) {
-      this.books[existingIdx] = { ...this.books[existingIdx], ...book };
+      this.books[existingIdx] = { ...this.books[existingIdx], ...bookToSave };
     } else {
-      this.books.unshift(book);
+      this.books.unshift(bookToSave);
     }
+
     await this._persistBooks();
-    return book;
+    if (this.hasUpstash) {
+      await this._setUpstashKey(REDIS_KEY_DELETED_BOOKS, Array.from(this.deletedBookIds));
+    }
+    return bookToSave;
+  }
+
+  async deleteBook(id) {
+    const idx = this.books.findIndex(b => b.id === id);
+    if (idx === -1) {
+      return false;
+    }
+
+    this.books.splice(idx, 1);
+    this.deletedBookIds.add(id);
+
+    this._persistLocalOnly();
+    this._persistDeletedLocal();
+
+    if (this.hasUpstash) {
+      await this._setUpstashKey(REDIS_KEY_BOOKS, this.books);
+      await this._setUpstashKey(REDIS_KEY_DELETED_BOOKS, Array.from(this.deletedBookIds));
+    }
+
+    // Clean up userState if deleted book was currently inProgress
+    if (this.userState.inProgress && this.userState.inProgress.bookId === id) {
+      const nextBook = this.books[0];
+      this.userState.inProgress = {
+        bookId: nextBook ? nextBook.id : 'atomic-habits',
+        chapterIndex: 1,
+        audioTimeSec: 0,
+        updatedAt: new Date().toISOString()
+      };
+      await this._persistUserState();
+    }
+
+    return true;
   }
 
   getUserState() {

@@ -121,6 +121,11 @@ class HeadwayApp {
     const voiceSelectorIcon = document.getElementById('icon-voice-selector');
     if (voiceSelectorIcon) voiceSelectorIcon.innerHTML = icons.mic(18);
     document.getElementById('icon-detail-listen').innerHTML = icons.play(14);
+    const detailSavedIcon = document.getElementById('icon-detail-saved');
+    if (detailSavedIcon) detailSavedIcon.innerHTML = icons.bookmark(14);
+    const detailDeleteIcon = document.getElementById('icon-detail-delete');
+    if (detailDeleteIcon) detailDeleteIcon.innerHTML = icons.trash(14);
+
     document.getElementById('studio-sparkle-icon').innerHTML = icons.sparkles(16);
     document.getElementById('all-caught-up-icon').innerHTML = icons.check(28);
 
@@ -370,6 +375,57 @@ class HeadwayApp {
         this.openReader(this.selectedBook, 1, false);
       }
     });
+
+    document.getElementById('btn-detail-delete')?.addEventListener('click', async () => {
+      if (this.selectedBook) {
+        await this.deleteBook(this.selectedBook.id);
+      }
+    });
+  }
+
+  showToast(message, type = 'success') {
+    const toast = document.getElementById('app-toast');
+    if (!toast) return;
+    toast.className = `app-toast toast-${type} is-visible`;
+    toast.innerHTML = `<span>${type === 'success' ? '✓' : '✕'}</span> <span>${message}</span>`;
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => {
+      toast.classList.remove('is-visible');
+    }, 3200);
+  }
+
+  async deleteBook(bookId) {
+    const book = this.books.find(b => b.id === bookId);
+    const title = book ? book.title : 'this edition';
+    const ok = confirm(`Delete "${title}" from your library?\n\nThis will remove its chapters, synchronized audio narration, and spaced-repetition flashcards.`);
+    if (!ok) return;
+
+    try {
+      const res = await fetch(`/api/books/${bookId}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to delete edition');
+      }
+
+      this.closeDetailModal();
+      this.books = this.books.filter(b => b.id !== bookId);
+      try {
+        localStorage.setItem('stride_cached_books', JSON.stringify(this.books));
+      } catch (_) {}
+
+      this.renderBooksGrid('today-book-grid');
+      this.renderBooksGrid('library-book-grid');
+
+      const countLabel = document.getElementById('library-count-label');
+      if (countLabel) countLabel.innerText = `${this.books.length} Titles`;
+
+      await this.fetchFlashcards();
+      await this.fetchShorts();
+
+      this.showToast(`Deleted "${title}" from library`, 'danger');
+    } catch (err) {
+      alert(`Deletion failed: ${err.message}`);
+    }
   }
 
   // --- Data Fetching, Local Cache (SWR) & Sync ---
@@ -587,7 +643,9 @@ class HeadwayApp {
     if (!container) return;
 
     let filtered = this.books;
-    if (this.activeCategory !== 'all') {
+    if (this.activeCategory === 'generated') {
+      filtered = filtered.filter((b) => b.isGenerated);
+    } else if (this.activeCategory !== 'all') {
       filtered = filtered.filter((b) => b.category === this.activeCategory);
     }
     if (searchQuery) {
@@ -602,7 +660,7 @@ class HeadwayApp {
     if (filtered.length === 0) {
       container.innerHTML = `
         <div style="text-align: center; padding: 32px 16px; color: var(--text-muted); font-size: 14px;">
-          No book summaries found for this selection.
+          ${this.activeCategory === 'generated' ? 'No custom AI editions generated yet. Visit AI Studio to summarize a YouTube video or book!' : 'No book summaries found for this selection.'}
         </div>
       `;
       return;
@@ -614,7 +672,10 @@ class HeadwayApp {
         <div class="book-card" data-book-id="${book.id}">
           <div class="book-card-spine" style="background-color: ${book.coverAccent || '#F5C518'};"></div>
           <div class="book-card-body">
-            <div class="book-card-category">${book.category || 'Nonfiction'}</div>
+            <div class="book-card-header-row">
+              <div class="book-card-category">${book.category || 'Nonfiction'}</div>
+              ${book.isGenerated ? `<span class="badge-ai-edition">${icons.sparkles(10)} AI Edition</span>` : ''}
+            </div>
             <div class="book-card-title">${book.title}</div>
             <div class="book-card-author">${book.author}</div>
             <div class="book-card-footer">
@@ -648,6 +709,15 @@ class HeadwayApp {
       document.getElementById('detail-author').innerText = b.author;
       document.getElementById('detail-category').innerText = b.category || 'Nonfiction';
       document.getElementById('detail-synopsis').innerText = b.synopsis || '';
+
+      const savedBadge = document.getElementById('detail-saved-badge');
+      if (savedBadge) {
+        savedBadge.innerHTML = `<span id="icon-detail-saved">${icons.bookmark(14)}</span> ${b.isGenerated ? 'Saved AI Edition' : 'Saved to Library'}`;
+      }
+      const deleteBtn = document.getElementById('btn-detail-delete');
+      if (deleteBtn) {
+        deleteBtn.innerHTML = `<span id="icon-detail-delete">${icons.trash(14)}</span> Delete Edition`;
+      }
 
       const takeawaysContainer = document.getElementById('detail-takeaways');
       if (takeawaysContainer) {
@@ -1286,7 +1356,9 @@ class HeadwayApp {
       }
 
       if (statusHeadline) statusHeadline.innerText = `🎉 Successfully Created Edition!`;
-      if (statusText) statusText.innerText = `"${data.book.title}" ready with 5 chapters & flashcards. Opening player...`;
+      if (statusText) statusText.innerText = `"${data.book.title}" saved to library. Opening reader...`;
+
+      this.showToast(`Saved to Library: "${data.book.title}"`, 'success');
 
       // Refresh catalog and flashcards
       await this.fetchBooks();
@@ -1388,7 +1460,9 @@ class HeadwayApp {
       }
 
       if (statusHeadline) statusHeadline.innerText = `🎉 Successfully Generated!`;
-      if (statusText) statusText.innerText = `"${data.book.title}" created. Opening reader...`;
+      if (statusText) statusText.innerText = `"${data.book.title}" saved to library. Opening reader...`;
+
+      this.showToast(`Saved to Library: "${data.book.title}"`, 'success');
 
       // Refresh catalog and flashcards
       await this.fetchBooks();

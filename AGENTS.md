@@ -45,6 +45,8 @@ headway/
 |---|---|---|
 | `GET` | `/api/books` | Returns catalog list of summarized books |
 | `GET` | `/api/books/:id` | Returns full book details with chapters, flashcards, quizzes |
+| `POST` | `/api/books` | Saves or syncs custom edition to local and Upstash cloud |
+| `DELETE` | `/api/books/:id` | Deletes edition from local, Upstash cloud, and user state |
 | `POST` | `/api/generate` | AI ingestion: Book/podcast topic -> 5 chapters + SM-2 cards + quiz |
 | `GET` | `/api/progress` | User reading streak, daily minutes & in-progress book |
 | `POST` | `/api/progress` | Increments listening/reading minutes & updates streak |
@@ -89,6 +91,12 @@ headway/
 ---
 
 ## 7. Changelog
+- **2026-10-05**: Permanent Cloud Persistence & Edition Save/Delete Management.
+  - Resolved catalog wipeout bug where server restarts without local cache overwrote Upstash Redis with seed books before cloud sync.
+  - Implemented 3-way resilient merge (`seedBooks` + `cloudBooks` + local) with persistent deleted ID tracking (`stride_deleted_book_ids`).
+  - Added `DELETE /api/books/:id` endpoint and `POST /api/books` for permanent cloud & local edition deletion and synchronization.
+  - Added "✨ Generated" category filter chip across Today and Library tabs, AI Edition visual badges, and Saved to Library status pill.
+  - Implemented in-modal edition deletion flow with tactile confirmation dialog and toast notifications.
 - **2026-10-04**: Zero-Latency SWR Startup & Direct YouTube oEmbed Resolution.
   - Implemented Stale-While-Revalidate (SWR) client caching with `Promise.allSettled` parallel background revalidation, reducing app startup and UI rendering latency from ~1.5s to 0ms instant display.
   - Decoupled Upstash Redis sync from Express server boot so `app.listen()` binds immediately in <10ms without blocking on cloud I/O.

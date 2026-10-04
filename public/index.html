@@ -94,6 +94,7 @@
         </div>
         <div class="category-chips" id="today-category-chips">
           <button class="chip-btn active" data-cat="all">All Topics</button>
+          <button class="chip-btn" data-cat="generated">✨ Generated</button>
           <button class="chip-btn" data-cat="Productivity & Habits">Productivity</button>
           <button class="chip-btn" data-cat="Career & Focus">Career</button>
           <button class="chip-btn" data-cat="Wealth & Finance">Wealth</button>
@@ -123,6 +124,7 @@
         <!-- Category Chips -->
         <div class="category-chips" id="library-category-chips">
           <button class="chip-btn active" data-cat="all">All</button>
+          <button class="chip-btn" data-cat="generated">✨ Generated</button>
           <button class="chip-btn" data-cat="Productivity & Habits">Productivity</button>
           <button class="chip-btn" data-cat="Career & Focus">Career & Focus</button>
           <button class="chip-btn" data-cat="Wealth & Finance">Wealth</button>
@@ -443,12 +445,21 @@
           <div id="detail-chapters-list" style="display: flex; flex-direction: column; gap: 6px;"></div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px;">
           <button class="btn-primary" id="btn-detail-start-listening" style="justify-content: center; padding: 12px;">
             <span id="icon-detail-listen"></span> Listen (15m)
           </button>
           <button class="btn-secondary" id="btn-detail-read-now" style="justify-content: center; padding: 12px;">
             Read Chapters
+          </button>
+        </div>
+
+        <div class="detail-footer-actions">
+          <div class="detail-saved-badge" id="detail-saved-badge">
+            <span id="icon-detail-saved"></span> Saved to Library
+          </div>
+          <button class="btn-detail-delete" id="btn-detail-delete" type="button" title="Delete edition from library">
+            <span id="icon-detail-delete"></span> Delete Edition
           </button>
         </div>
       </div>
@@ -539,6 +550,9 @@
     }
   </style>
 
-  <script type="module" src="/js/app.js?v=8"></script>
+  <!-- Global Toast Notification -->
+  <div class="app-toast" id="app-toast" aria-live="polite"></div>
+
+  <script type="module" src="/js/app.js?v=9"></script>
 </body>
 </html>

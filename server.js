@@ -53,6 +53,34 @@ app.get('/api/books/:id', (req, res) => {
   }
 });
 
+// 2.1 Save / Sync Book to Catalog
+app.post('/api/books', async (req, res) => {
+  try {
+    const book = req.body;
+    if (!book || !book.id || !book.title) {
+      return res.status(400).json({ success: false, error: 'Invalid book payload' });
+    }
+    const saved = await db.saveBook(book);
+    res.json({ success: true, book: saved });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 2.2 Delete Book from Catalog
+app.delete('/api/books/:id', async (req, res) => {
+  try {
+    const bookId = req.params.id;
+    const deleted = await db.deleteBook(bookId);
+    if (!deleted) {
+      return res.status(404).json({ success: false, error: 'Book not found' });
+    }
+    res.json({ success: true, message: `Book ${bookId} successfully deleted` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // 3. User Progress & Daily Streaks
 app.get('/api/progress', (req, res) => {
   try {
