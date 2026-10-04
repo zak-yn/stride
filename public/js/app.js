@@ -27,6 +27,7 @@ class HeadwayApp {
 
     // Selected book for details
     this.selectedBook = null;
+    this.currentRenderedChapterKey = null;
 
     // Init Audio Engine
     this.audio = new AudioEngine({
@@ -727,24 +728,32 @@ class HeadwayApp {
       });
     }
 
-    // Render Paragraphs
-    const textContainer = document.getElementById('reader-text-container');
-    if (textContainer && curChapter) {
-      textContainer.innerHTML = (this.audio.paragraphs || [])
-        .map(
-          (p, idx) => `
-          <p class="${idx === 0 ? 'sentence-active' : ''}" data-para-idx="${idx}">${p}</p>
-        `
-        )
-        .join('');
+    // Render initial chapter paragraphs
+    const chapterKey = `${book.id}_ch_${curChapter?.chapterIndex || chapterIndex}`;
+    this.currentRenderedChapterKey = chapterKey;
+    this.renderChapterParagraphs(this.audio.paragraphs, 0);
+  }
 
-      textContainer.querySelectorAll('p').forEach((pEl) => {
-        pEl.addEventListener('click', () => {
-          const pIdx = parseInt(pEl.dataset.paraIdx, 10);
-          this.audio.jumpToParagraph(pIdx);
-        });
+  renderChapterParagraphs(paragraphs, activeIdx = 0) {
+    const textContainer = document.getElementById('reader-text-container');
+    if (!textContainer) return;
+
+    textContainer.innerHTML = (paragraphs || [])
+      .map(
+        (p, idx) => `
+        <p class="${idx === activeIdx ? 'sentence-active' : ''}" data-para-idx="${idx}">${p}</p>
+      `
+      )
+      .join('');
+
+    textContainer.querySelectorAll('p').forEach((pEl) => {
+      pEl.addEventListener('click', () => {
+        const pIdx = parseInt(pEl.dataset.paraIdx, 10);
+        this.audio.jumpToParagraph(pIdx);
       });
-    }
+    });
+
+    textContainer.scrollTop = 0;
   }
 
   handleAudioStateChange(state) {
@@ -764,6 +773,13 @@ class HeadwayApp {
       document.querySelectorAll('.chapter-tab-pill').forEach((pill) => {
         pill.classList.toggle('active', parseInt(pill.dataset.ch, 10) === state.chapter.chapterIndex);
       });
+
+      // Synchronize reader text container whenever chapter changes
+      const chapterKey = `${this.audio.currentBook?.id || ''}_ch_${state.chapter.chapterIndex}`;
+      if (this.currentRenderedChapterKey !== chapterKey) {
+        this.currentRenderedChapterKey = chapterKey;
+        this.renderChapterParagraphs(this.audio.paragraphs, state.paragraphIdx || 0);
+      }
     }
 
     if (state.totalParagraphs && state.totalParagraphs > 0) {

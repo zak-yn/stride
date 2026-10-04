@@ -92,6 +92,7 @@ headway/
 - **2026-10-04**: Studio Neural Audio Upgrade & Concurrency Architecture Fix.
   - Re-architected `AudioEngine` around a single dedicated `HTMLAudioElement` with session-ID tokens (`playSessionId`) to completely eliminate dual playback (simultaneous SpeechSynthesis and Audio).
   - Fixed HTML5 `pause`/`ended` event ordering where browsers fired `pause` upon completion, unblocking automatic sequential paragraph advancement (0 -> 1 -> 2 -> ...).
+  - Wired dynamic DOM re-rendering (`renderChapterParagraphs`) inside `handleAudioStateChange` so changing chapters (pills or next-chapter button) immediately refreshes the displayed text and resets scroll position.
   - Integrated in-memory LRU audio buffer caching on `/api/tts` with exact `Content-Length` and `Accept-Ranges` headers, enabling 0ms instant repeated plays and deterministic seek/ended events.
   - Resolved `msedge-tts` WebSocket initialization collision by provisioning isolated client instances per synthesis.
 - **2026-10-04**: YouTube In-App Search, Video Summarization & English Default.
