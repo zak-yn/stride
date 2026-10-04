@@ -1,7 +1,4 @@
-/**
- * Headway AI Engine: Powered by Gemini 3.5 Flash Lite
- * Free-tier optimized with resilient fallback & high-demand exponential backoff.
- */
+import 'dotenv/config';
 
 const USER_API_KEY = process.env.GEMINI_API_KEY || '';
 const FALLBACK_API_KEY = process.env.GEMINI_FALLBACK_KEY || '';
@@ -65,9 +62,15 @@ export class GeminiSummarizer {
     }
   }
 
-  async summarizeContent({ input, language = 'English' }) {
+  async summarizeContent({ input, language = 'English', expectedTitle = '', expectedAuthor = '' }) {
     const systemPrompt = `You are a world-class editorial curator and executive summary writer for Stride, the premier microlearning application.
-Transform the provided input (book title, author, topic, or raw transcript) into a high-density, beautifully structured microlearning masterwork.
+Transform the provided input into a high-density, beautifully structured microlearning masterwork.
+
+CRITICAL FIDELITY & DOMAIN ACCURACY DIRECTIVES:
+1. The title, author, synopsis, key takeaways, and all 5 chapters MUST strictly reflect the exact subject, ideas, and speaker specified in the input.
+2. NEVER generate generic productivity or focus advice unless the input is specifically and genuinely about productivity or focus.
+3. If the topic is geopolitics, global finance, conflict, biology, history, philosophy, or personal stories, explore that exact topic deeply with nuanced domain facts and insights.
+${expectedTitle ? `4. The primary subject is "${expectedTitle}" by "${expectedAuthor}". The summary MUST be entirely about this subject.` : ''}
 
 Output MUST be strictly valid JSON matching this exact structure:
 {
@@ -134,14 +137,14 @@ Output MUST be strictly valid JSON matching this exact structure:
     }
   ],
   "quiz": {
-    "scenario": "A concrete real-world workplace or life dilemma applying this book's teachings.",
+    "scenario": "A concrete real-world dilemma applying this material's teachings.",
     "options": [
       "Common intuitive but suboptimal reaction",
-      "Optimal principled approach recommended by the author",
+      "Optimal principled approach recommended by the material",
       "Counterproductive or extreme reaction"
     ],
     "correctIndex": 1,
-    "explanation": "Brief 1-2 sentence lesson explaining why the chosen option succeeds based on the book's principles."
+    "explanation": "Brief 1-2 sentence lesson explaining why the chosen option succeeds based on the material's principles."
   },
   "shortInsights": [
     {
@@ -190,19 +193,33 @@ ${input.slice(0, 50000)}
   }
 
   async summarizeYouTubeVideo({ videoId, title, author, description, transcript, thumbnail, videoUrl }, language = 'English') {
+    const hasTranscript = Boolean(transcript && transcript.length > 50);
     const inputContent = `
 YOUTUBE VIDEO INFORMATION:
 - Video Title: ${title}
 - Channel / Speaker: ${author}
 - Video URL: ${videoUrl}
 
-${transcript && transcript.length > 50 ? `SPOKEN SPEECH TRANSCRIPT:\n${transcript.slice(0, 48000)}` : `VIDEO DESCRIPTION & OUTLINE:\n${description}`}
+${hasTranscript ? `SPOKEN SPEECH TRANSCRIPT:\n${transcript.slice(0, 48000)}` : `VIDEO DESCRIPTION & TOPIC CONTEXT:
+${description || `Detailed examination of "${title}" featuring ${author}.`}
+
+NOTE: Video subtitles were not available. Synthesize a comprehensive, high-depth microlearning summary strictly covering the actual concepts, background, arguments, and key lessons of "${title}" by ${author}. Do NOT produce generic, unrelated self-help content.`}
 `;
 
     const summary = await this.summarizeContent({
       input: inputContent,
-      language
+      language,
+      expectedTitle: title,
+      expectedAuthor: author
     });
+
+    // Ensure title and author fidelity
+    if (!summary.title || summary.title === 'Clean Title of the Book or Topic' || summary.title.toLowerCase().includes('mastering your focus')) {
+      summary.title = title;
+    }
+    if (!summary.author || summary.author === 'YouTube Creator' || summary.author === 'Author or Speaker Name') {
+      summary.author = author;
+    }
 
     // Attach YouTube-specific metadata
     summary.sourceType = 'youtube';

@@ -140,10 +140,11 @@ app.get('/api/tts', async (req, res) => {
 app.get('/api/youtube/search', async (req, res) => {
   try {
     const q = req.query.q;
+    const lang = req.query.lang || 'English';
     if (!q || !q.trim()) {
       return res.json({ success: true, videos: [] });
     }
-    const videos = await searchYouTube(q);
+    const videos = await searchYouTube(q, lang);
     res.json({ success: true, videos });
   } catch (err) {
     console.error('YouTube search error:', err.message);
@@ -153,7 +154,7 @@ app.get('/api/youtube/search', async (req, res) => {
 
 app.post('/api/youtube/summarize', async (req, res) => {
   try {
-    const { urlOrId, language } = req.body;
+    const { urlOrId, title, channel, thumbnail, language } = req.body;
     if (!urlOrId || !urlOrId.trim()) {
       return res.status(400).json({ success: false, error: 'YouTube URL or Video ID is required' });
     }
@@ -164,7 +165,12 @@ app.post('/api/youtube/summarize', async (req, res) => {
     }
 
     console.log(`🎬 [YouTube] Fetching details & transcript for video: ${videoId}...`);
-    const videoDetails = await fetchVideoDetailsAndTranscript(videoId);
+    const videoDetails = await fetchVideoDetailsAndTranscript(videoId, {
+      clientTitle: title,
+      clientChannel: channel,
+      clientThumbnail: thumbnail,
+      preferredLanguage: language || 'English'
+    });
 
     console.log(`🤖 [Gemini] Summarizing YouTube video "${videoDetails.title}" with Gemini 3.5 Flash Lite...`);
     const summaryData = await geminiSummarizer.summarizeYouTubeVideo(

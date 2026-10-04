@@ -1064,8 +1064,11 @@ class HeadwayApp {
       `;
     }
 
+    const langSelect = document.getElementById('yt-output-language');
+    const selectedLang = langSelect ? langSelect.value : 'English';
+
     try {
-      const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(query)}`);
+      const res = await fetch(`/api/youtube/search?q=${encodeURIComponent(query)}&lang=${encodeURIComponent(selectedLang)}`);
       const data = await res.json();
 
       if (btn) {
@@ -1121,7 +1124,11 @@ class HeadwayApp {
           </div>
         </div>
         <div class="yt-card-footer">
-          <button class="yt-summarize-btn" data-video-id="${v.videoId}" data-title="${encodeURIComponent(v.title)}">
+          <button class="yt-summarize-btn" 
+            data-video-id="${v.videoId}" 
+            data-title="${encodeURIComponent(v.title)}"
+            data-channel="${encodeURIComponent(v.channel || '')}"
+            data-thumbnail="${encodeURIComponent(v.thumbnail || '')}">
             <span>✨</span> Summarize with Gemini
           </button>
         </div>
@@ -1134,12 +1141,14 @@ class HeadwayApp {
         e.stopPropagation();
         const vId = btn.dataset.videoId;
         const rawTitle = decodeURIComponent(btn.dataset.title || 'YouTube Video');
-        await this.handleYouTubeSummarize(vId, rawTitle);
+        const rawChannel = decodeURIComponent(btn.dataset.channel || '');
+        const rawThumbnail = decodeURIComponent(btn.dataset.thumbnail || '');
+        await this.handleYouTubeSummarize(vId, rawTitle, rawChannel, rawThumbnail);
       });
     });
   }
 
-  async handleYouTubeSummarize(videoId, videoTitle) {
+  async handleYouTubeSummarize(videoId, videoTitle, videoChannel = '', videoThumbnail = '') {
     const statusBox = document.getElementById('studio-status-box');
     const statusHeadline = document.getElementById('studio-status-headline');
     const statusText = document.getElementById('studio-status-text');
@@ -1164,6 +1173,9 @@ class HeadwayApp {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           urlOrId: videoId,
+          title: videoTitle,
+          channel: videoChannel,
+          thumbnail: videoThumbnail,
           language: selectedLang
         })
       });

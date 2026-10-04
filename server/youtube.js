@@ -18,14 +18,17 @@ export function extractYouTubeId(urlOrId) {
 }
 
 // In-app YouTube search scraper (no API key / quota required)
-export async function searchYouTube(query) {
+export async function searchYouTube(query, preferredLanguage = 'English') {
   if (!query || !query.trim()) return [];
   try {
+    const isJapanese = preferredLanguage === 'Japanese' || /[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff]/.test(query);
+    const acceptLanguage = isJapanese ? 'ja,en-US;q=0.9,en;q=0.8' : 'en-US,en;q=0.9';
+
     const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query.trim())}`;
     const res = await fetch(searchUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
+        'Accept-Language': acceptLanguage
       },
       signal: AbortSignal.timeout(10000)
     });
@@ -53,7 +56,12 @@ export async function searchYouTube(query) {
             const length = video.lengthText?.simpleText || '';
             const views = video.viewCountText?.simpleText || '';
             const published = video.publishedTimeText?.simpleText || '';
-            const thumbnail = video.thumbnail?.thumbnails?.slice(-1)[0]?.url || `https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg`;
+            
+            // Prefer clean non-localized thumbnail when searching in English
+            let thumbnail = video.thumbnail?.thumbnails?.slice(-1)[0]?.url || `https://i.ytimg.com/vi/${video.videoId}/hqdefault.jpg`;
+            if (!isJapanese && thumbnail.includes('_ja.jpg')) {
+              thumbnail = `https://i.ytimg.com/vi/${video.videoId}/hq720.jpg`;
+            }
 
             // Filter out empty titles or shorts with no length
             if (title) {
@@ -84,20 +92,29 @@ export async function searchYouTube(query) {
 }
 
 // Fetch complete video metadata and speech transcript
-export async function fetchVideoDetailsAndTranscript(videoId) {
+export async function fetchVideoDetailsAndTranscript(videoId, options = {}) {
+  const {
+    clientTitle = '',
+    clientChannel = '',
+    clientThumbnail = '',
+    preferredLanguage = 'English'
+  } = options;
+
   const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  const isJapanese = preferredLanguage === 'Japanese';
+  const acceptLanguage = isJapanese ? 'ja,en-US;q=0.9,en;q=0.8' : 'en-US,en;q=0.9';
   
-  // 1. Fetch web page metadata (title, author, description)
-  let title = '';
-  let author = 'YouTube Creator';
+  // 1. Initialize with client-passed metadata fallbacks
+  let title = clientTitle || '';
+  let author = clientChannel || 'YouTube Creator';
   let description = '';
-  let thumbnail = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+  let thumbnail = clientThumbnail || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
   try {
     const res = await fetch(videoUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
+        'Accept-Language': acceptLanguage
       },
       signal: AbortSignal.timeout(10000)
     });
@@ -112,11 +129,14 @@ export async function fetchVideoDetailsAndTranscript(videoId) {
           const playerData = JSON.parse(playerMatch[1]);
           const videoDetails = playerData?.videoDetails;
           if (videoDetails) {
-            title = videoDetails.title || '';
-            author = videoDetails.author || 'YouTube Creator';
-            description = videoDetails.shortDescription || '';
+            if (videoDetails.title) title = videoDetails.title;
+            if (videoDetails.author) author = videoDetails.author;
+            if (videoDetails.shortDescription) description = videoDetails.shortDescription;
             if (videoDetails.thumbnail?.thumbnails?.length > 0) {
-              thumbnail = videoDetails.thumbnail.thumbnails.slice(-1)[0].url;
+              const scrapedThumb = videoDetails.thumbnail.thumbnails.slice(-1)[0].url;
+              if (!(!isJapanese && scrapedThumb.includes('_ja.jpg'))) {
+                thumbnail = scrapedThumb;
+              }
             }
           }
         } catch (e) {
@@ -124,7 +144,7 @@ export async function fetchVideoDetailsAndTranscript(videoId) {
         }
       }
 
-      // Fallback title regex
+      // Fallback title regex if still empty
       if (!title) {
         const titleMatch = html.match(/<title>(.*?)<\/title>/i);
         if (titleMatch) {
@@ -146,28 +166,29 @@ export async function fetchVideoDetailsAndTranscript(videoId) {
     }
   } catch (trErr1) {
     try {
-      // If default failed, try Japanese explicitly
-      const itemsJa = await YoutubeTranscript.fetchTranscript(videoId, { lang: 'ja' });
-      if (itemsJa && itemsJa.length > 0) {
-        transcript = itemsJa.map(t => t.text).join(' ').replace(/\s+/g, ' ').trim();
+      // If default failed, try requested language explicitly
+      const targetLang = isJapanese ? 'ja' : 'en';
+      const itemsLang = await YoutubeTranscript.fetchTranscript(videoId, { lang: targetLang });
+      if (itemsLang && itemsLang.length > 0) {
+        transcript = itemsLang.map(t => t.text).join(' ').replace(/\s+/g, ' ').trim();
       }
     } catch (trErr2) {
       try {
-        // If Japanese failed, try English explicitly
+        // Fallback to English explicitly
         const itemsEn = await YoutubeTranscript.fetchTranscript(videoId, { lang: 'en' });
         if (itemsEn && itemsEn.length > 0) {
           transcript = itemsEn.map(t => t.text).join(' ').replace(/\s+/g, ' ').trim();
         }
       } catch (trErr3) {
-        console.warn(`[YouTube] No subtitle track found for ${videoId}. Using video description fallback.`);
+        console.warn(`[YouTube] No subtitle track found for ${videoId}. Using video metadata.`);
       }
     }
   }
 
   return {
     videoId,
-    title: title || `YouTube Video (${videoId})`,
-    author,
+    title: title || clientTitle || `YouTube Video (${videoId})`,
+    author: (author && author !== 'YouTube Creator') ? author : (clientChannel || 'YouTube Creator'),
     description: description.slice(0, 3000),
     transcript,
     thumbnail,
